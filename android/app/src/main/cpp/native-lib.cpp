@@ -126,7 +126,9 @@ struct Super3Host {
   }
 
   void ApplyDefaults() {
-    config.Set("MultiThreaded", false);
+    // Enable the core's sound-board thread so audio can stay smooth even if
+    // rendering/input causes occasional stalls on Android.
+    config.Set("MultiThreaded", true);
     config.Set("GPUMultiThreaded", false);
     config.Set("EmulateSound", true);
     config.Set("EmulateDSB", true);
@@ -135,8 +137,9 @@ struct Super3Host {
     config.Set("BalanceFrontRear", "0");
     config.Set("NbSoundChannels", "4");
     config.Set("SoundFreq", "57.6");
-    config.Set("SoundVolume", "100");
-    config.Set("MusicVolume", "100");
+    // Supermodel.ini commonly uses 200 as "100%".
+    config.Set("SoundVolume", "200");
+    config.Set("MusicVolume", "200");
     config.Set("LegacySoundDSP", false);
     config.Set("New3DEngine", false);
     config.Set("QuadRendering", false);
@@ -401,6 +404,7 @@ extern "C" int SDL_main(int argc, char* argv[]) {
   uint32_t lastStatusLog = SDL_GetTicks();
   bool backgrounded = false;
   bool loggedControls = false;
+  bool audioOpened = false;
   while (running) {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
@@ -448,6 +452,13 @@ extern "C" int SDL_main(int argc, char* argv[]) {
 
     const int state = loadState.load(std::memory_order_acquire);
     if (state == 1) {
+      if (!audioOpened) {
+        audioOpened = true;
+        SetAudioType(host.game.audio);
+        if (!OpenAudio(host.config)) {
+          SDL_LogError(SDL_LOG_CATEGORY_AUDIO, "OpenAudio failed (continuing without audio)");
+        }
+      }
       if (!loggedControls) {
         loggedControls = true;
         SDL_Log("Controls (touch): bottom-left=COIN, bottom-right=START, top-left=SERVICE, top-right=TEST, left-middle=DPAD/STEER, right-middle=THROTTLE/BRAKE");
@@ -506,6 +517,7 @@ extern "C" int SDL_main(int argc, char* argv[]) {
   if (loadState.load(std::memory_order_acquire) == 1) {
     host.SaveNVRAM();
   }
+  CloseAudio();
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
