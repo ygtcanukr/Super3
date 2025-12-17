@@ -23,6 +23,7 @@
 #include "OSD/Audio.h"
 #include "OSD/Logger.h"
 #include "Util/NewConfig.h"
+#include "Util/ConfigBuilders.h"
 #include "BlockFile.h"
 
 #include "android_input_system.h"
@@ -176,10 +177,99 @@ struct Super3Host {
     config.Set("InputSteeringRight", "KEY_RIGHT");
     config.Set("InputAccelerator", "KEY_W");
     config.Set("InputBrake", "KEY_S");
+    inputSystem.ApplyConfig(config);
+  }
+
+  void ApplyAndroidHardOverrides()
+  {
+    auto ensureKeyboardFallback = [&](const char* cfgKey, const char* defaultKeyToken) {
+      std::string v = config[cfgKey].ValueAsDefault<std::string>("");
+      if (v.empty()) {
+        config.Set(cfgKey, defaultKeyToken);
+        return;
+      }
+      std::string upper = v;
+      std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return (char)std::toupper(c); });
+      if (upper.find("KEY_") == std::string::npos) {
+        config.Set(cfgKey, std::string(defaultKeyToken) + "," + v);
+      }
+    };
+
+    // Settings that must remain stable on Android (unsupported or not yet wired).
+    config.Set("InputSystem", "sdl");
+    config.Set("Outputs", "none");
+    config.Set("ForceFeedback", false);
+    config.Set("Network", false);
+    config.Set("SimulateNet", false);
+
+    // Ensure required nodes exist / sane.
+    config.Set("PowerPCFrequency", "50");
+
+    // Keep the current Android renderer path stable for now.
+    config.Set("New3DEngine", false);
+    config.Set("QuadRendering", false);
+
+    // Android build currently targets the native 496x384 framebuffer.
+    config.Set("XResolution", "496");
+    config.Set("YResolution", "384");
+
+    // Ensure touch zones always have a working keyboard mapping even if the user remaps to joystick-only.
+    ensureKeyboardFallback("InputCoin1", "KEY_5");
+    ensureKeyboardFallback("InputStart1", "KEY_1");
+    ensureKeyboardFallback("InputServiceA", "KEY_F1");
+    ensureKeyboardFallback("InputTestA", "KEY_F2");
+    ensureKeyboardFallback("InputJoyUp", "KEY_UP");
+    ensureKeyboardFallback("InputJoyDown", "KEY_DOWN");
+    ensureKeyboardFallback("InputJoyLeft", "KEY_LEFT");
+    ensureKeyboardFallback("InputJoyRight", "KEY_RIGHT");
+    ensureKeyboardFallback("InputSteeringLeft", "KEY_LEFT");
+    ensureKeyboardFallback("InputSteeringRight", "KEY_RIGHT");
+    ensureKeyboardFallback("InputAccelerator", "KEY_W");
+    ensureKeyboardFallback("InputBrake", "KEY_S");
+
+    inputSystem.ApplyConfig(config);
+  }
+
+  void ApplyIniOverrides(const std::string& gameSectionName)
+  {
+    const std::string base = userDataRoot.empty() ? std::string("super3") : userDataRoot;
+    const std::string iniPath = JoinPath(JoinPath(base, "Config"), "Supermodel.ini");
+    if (!std::filesystem::exists(iniPath)) {
+      SDL_Log("Supermodel.ini not found at %s (using built-in defaults)", iniPath.c_str());
+      return;
+    }
+
+    Util::Config::Node iniConfig{"Global"};
+    if (Util::Config::FromINIFile(&iniConfig, iniPath)) {
+      SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to parse %s (using built-in defaults)", iniPath.c_str());
+      return;
+    }
+
+    // Merge global settings: INI overrides built-in defaults.
+    {
+      Util::Config::Node merged{"Global"};
+      Util::Config::MergeINISections(&merged, config, iniConfig);
+      config = merged;
+    }
+
+    // Merge game-specific settings if present.
+    if (!gameSectionName.empty()) {
+      const Util::Config::Node* section = iniConfig.TryGet(gameSectionName);
+      if (section != nullptr) {
+        Util::Config::Node merged{"Global"};
+        Util::Config::MergeINISections(&merged, config, *section);
+        config = merged;
+      }
+    }
+
+    ApplyAndroidHardOverrides();
+    inputSystem.ApplyConfig(config);
   }
 
   bool InitLoader(const std::string& gamesXml) {
     ApplyDefaults();
+    ApplyIniOverrides(std::string());
+    ApplyAndroidHardOverrides();
     if (!std::filesystem::exists(gamesXml)) {
       ErrorLog("Games XML not found at %s", gamesXml.c_str());
       SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Games XML not found at %s", gamesXml.c_str());
@@ -208,6 +298,10 @@ struct Super3Host {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load ROM definition for %s", zipPath.c_str());
         return false;
       }
+
+      // Apply Supermodel.ini overrides (Global + [ game ]) after the loader has determined game->name.
+      ApplyIniOverrides(game.name);
+      ApplyAndroidHardOverrides();
 
       // Initialize inputs before attaching to model
       if (!inputs.Initialize()) {
@@ -274,30 +368,14 @@ struct Super3Host {
     }
   }
 
-  bool InstallNew3D(unsigned totalXRes, unsigned totalYRes)
+  bool InstallNew3D(unsigned xOff, unsigned yOff, unsigned xRes, unsigned yRes, unsigned totalXRes, unsigned totalYRes)
   {
     if (!model3 || new3d)
       return !!new3d;
 
-    // Letterbox the Model 3 496x384 output into the physical drawable area.
-    // We pass the "viewable area" size to New3D so it doesn't wide-screen expand the frustum.
-    const float targetAR = 496.0f / 384.0f;
-    unsigned viewW = totalXRes;
-    unsigned viewH = totalYRes;
-    const float windowAR = (float)totalXRes / (float)totalYRes;
-    if (windowAR > targetAR) {
-      viewH = totalYRes;
-      viewW = (unsigned)std::lround((double)totalYRes * targetAR);
-    } else {
-      viewW = totalXRes;
-      viewH = (unsigned)std::lround((double)totalXRes / targetAR);
-    }
-    const unsigned xOff = (totalXRes - viewW) / 2;
-    const unsigned yOff = (totalYRes - viewH) / 2;
-
     SDL_Log("Initializing New3D (GLES) ...");
     new3d = std::make_unique<New3D::CNew3D>(config, game.name);
-    if (new3d->Init(xOff, yOff, viewW, viewH, viewW, viewH) != 0)
+    if (new3d->Init(xOff, yOff, xRes, yRes, totalXRes, totalYRes) != 0)
     {
       SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "New3D Init failed");
       new3d.reset();
@@ -426,6 +504,12 @@ extern "C" int SDL_main(int argc, char* argv[]) {
   if (argc > 2 && argv[2]) {
     gameName = argv[2];
   }
+  if (argc > 3 && argv[3]) {
+    gamesXml = argv[3];
+  }
+  if (argc > 4 && argv[4] && argv[4][0] != '\0') {
+    host.SetUserDataRoot(argv[4]);
+  }
 
   SDL_Log("Super3 paths: Games.xml=%s ROM=%s", gamesXml.c_str(), romZip.c_str());
 
@@ -501,6 +585,42 @@ extern "C" int SDL_main(int argc, char* argv[]) {
     if (winW <= 0) winW = 1;
     if (winH <= 0) winH = 1;
 
+    // Compute aspect-correct viewable area (xRes/yRes) centered within the drawable (totalXRes/totalYRes).
+    const unsigned totalXRes = (unsigned)winW;
+    const unsigned totalYRes = (unsigned)winH;
+    unsigned xRes = totalXRes;
+    unsigned yRes = totalYRes;
+    const float model3AR = 496.0f / 384.0f;
+    const float outAR = (float)totalXRes / (float)totalYRes;
+    if (outAR > model3AR) {
+      // output is wider => reduce width
+      xRes = (unsigned)std::lround((double)totalYRes * model3AR);
+      yRes = totalYRes;
+    } else if (outAR < model3AR) {
+      // output is taller => reduce height
+      xRes = totalXRes;
+      yRes = (unsigned)std::lround((double)totalXRes / model3AR);
+    }
+    const unsigned xOff = (totalXRes - xRes) / 2;
+    const unsigned yOff = (totalYRes - yRes) / 2;
+
+    const bool wideScreen = host.config["WideScreen"].ValueAsDefault<bool>(false);
+    const bool wideBackground = host.config["WideBackground"].ValueAsDefault<bool>(false);
+
+    // Clear full drawable (scissor off), then set scissor like desktop.
+    glDisable(GL_SCISSOR_TEST);
+    glViewport(0, 0, winW, winH);
+    glClearColor(0.f, 0.f, 0.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    const unsigned correction = (unsigned)(((double)yRes / 384.0) * 2.0 + 0.5);
+    glEnable(GL_SCISSOR_TEST);
+    if (wideScreen) {
+      glScissor(0, (int)correction, (int)totalXRes, (int)(totalYRes - (correction * 2)));
+    } else {
+      glScissor((int)(xOff + correction), (int)(yOff + correction), (int)(xRes - (correction * 2)), (int)(yRes - (correction * 2)));
+    }
+
     const int state = loadState.load(std::memory_order_acquire);
     if (state == 1) {
       if (!audioOpened) {
@@ -516,18 +636,16 @@ extern "C" int SDL_main(int argc, char* argv[]) {
       }
 
       if (!new3dAttached) {
-        new3dAttached = host.InstallNew3D((unsigned)winW, (unsigned)winH);
+        new3dAttached = host.InstallNew3D(xOff, yOff, xRes, yRes, totalXRes, totalYRes);
       }
 
       if (new3dAttached) {
-        // 3D path: let New3D draw into the default framebuffer from inside the core.
-        glViewport(0, 0, winW, winH);
-        glClearColor(0.f, 0.f, 0.f, 1.f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        // 3D path: let New3D draw into the default framebuffer from inside the core (scissored).
         host.RunFrame();
 
         // Overlay TileGen top layers (HUD/menus) on top of 3D.
         presenter.Resize(winW, winH);
+        presenter.SetStretch(false);
         if (host.render2d.HasTopSurface()) {
           const uint32_t* pixels = host.render2d.GetTopSurfaceARGB();
           presenter.UpdateFrameARGB(pixels, (int)host.render2d.GetFrameWidth(), (int)host.render2d.GetFrameHeight());
@@ -537,8 +655,7 @@ extern "C" int SDL_main(int argc, char* argv[]) {
         // 2D-only path: keep showing TileGen software output.
         host.RunFrame();
         presenter.Resize(winW, winH);
-        glClearColor(0.f, 0.f, 0.f, 1.f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        presenter.SetStretch(wideBackground);
         if (host.render2d.HasFrame()) {
           const uint32_t* pixels = host.render2d.GetFrameBufferRGBA();
           presenter.UpdateFrameARGB(pixels, (int)host.render2d.GetFrameWidth(), (int)host.render2d.GetFrameHeight());

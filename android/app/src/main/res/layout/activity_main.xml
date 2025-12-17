@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:orientation="vertical"
+  android:padding="16dp">
+
+  <TextView
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Games folder (SAF):"
+    android:textStyle="bold" />
+
+  <TextView
+    android:id="@+id/games_folder_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Not set"
+    android:textSize="12sp"
+    android:maxLines="2" />
+
+  <Button
+    android:id="@+id/pick_games_folder"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Pick Games Folder" />
+
+  <Space
+    android:layout_width="match_parent"
+    android:layout_height="8dp" />
+
+  <TextView
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="User folder (SAF, optional):"
+    android:textStyle="bold" />
+
+  <TextView
+    android:id="@+id/user_folder_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Not set"
+    android:textSize="12sp"
+    android:maxLines="2" />
+
+  <Button
+    android:id="@+id/pick_user_folder"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Pick User Folder" />
+
+  <Space
+    android:layout_width="match_parent"
+    android:layout_height="8dp" />
+
+  <Button
+    android:id="@+id/rescan_button"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:text="Rescan" />
+
+  <TextView
+    android:id="@+id/status_text"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingTop="8dp"
+    android:text="Tap a game to launch"
+    android:textSize="12sp" />
+
+  <ListView
+    android:id="@+id/games_list"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:divider="@android:color/darker_gray"
+    android:dividerHeight="1dp" />
+
+</LinearLayout>
+

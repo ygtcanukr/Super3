@@ -9,7 +9,7 @@
     android:theme="@style/Theme.Super3">
 
     <activity
-      android:name=".Super3Activity"
+      android:name=".MainActivity"
       android:screenOrientation="sensorLandscape"
       android:exported="true">
 
@@ -17,6 +17,13 @@
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
+
+    </activity>
+
+    <activity
+      android:name=".Super3Activity"
+      android:screenOrientation="sensorLandscape"
+      android:exported="false">
 
       <!-- Tell SDL which native library to load -->
       <meta-data

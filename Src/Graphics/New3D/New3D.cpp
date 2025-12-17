@@ -1716,12 +1716,7 @@ void CNew3D::CalcViewport(Viewport* vp, float near, float far)
 		// and only their scissor box differs)
 		float correction = windowAR / viewableAreaAR;
 
-		// Android: use x offset for letterboxed "viewable area" within the physical window.
-#ifdef __ANDROID__
-		vp->x		= m_xOffs;
-#else
 		vp->x		= 0;
-#endif
 		vp->y		= m_yOffs + (int)((float)(384 - (vp->vpY + vp->vpHeight))*m_yRatio);
 		vp->width	= m_totalXRes;
 		vp->height = (int)((float)vp->vpHeight*m_yRatio);

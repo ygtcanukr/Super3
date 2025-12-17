@@ -13,6 +13,7 @@ public:
   void Shutdown();
 
   void Resize(int outputW, int outputH);
+  void SetStretch(bool stretch) { m_stretch = stretch; }
 
   // pixelsARGB: 0xAARRGGBB packed.
   void UpdateFrameARGB(const uint32_t* pixelsARGB, int width, int height);
@@ -27,6 +28,7 @@ private:
   int m_outputH = 0;
   int m_srcW = 0;
   int m_srcH = 0;
+  bool m_stretch = false;
 
   unsigned m_program = 0;
   unsigned m_vao = 0;

@@ -179,9 +179,16 @@ void GlesPresenter::UpdateQuadVerts()
   const float srcW = (float)m_srcW;
   const float srcH = (float)m_srcH;
 
-  const float scale = std::min(outW / srcW, outH / srcH);
-  const float drawW = srcW * scale;
-  const float drawH = srcH * scale;
+  float drawW;
+  float drawH;
+  if (m_stretch) {
+    drawW = outW;
+    drawH = outH;
+  } else {
+    const float scale = std::min(outW / srcW, outH / srcH);
+    drawW = srcW * scale;
+    drawH = srcH * scale;
+  }
 
   const float ndcW = (drawW / outW) * 2.0f;
   const float ndcH = (drawH / outH) * 2.0f;

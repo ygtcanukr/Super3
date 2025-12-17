@@ -9,6 +9,41 @@ AndroidInputSystem::AndroidInputSystem()
 {
 }
 
+void AndroidInputSystem::ApplyConfig(const Util::Config::Node& config)
+{
+  auto get = [&](const char* key, const char* fallback) -> std::string {
+    return config[key].ValueAsDefault<std::string>(fallback);
+  };
+
+  auto keySc = [&](const std::string& mapping, SDL_Scancode fallback) -> SDL_Scancode {
+    if (mapping.empty()) return fallback;
+    SDL_Scancode sc = ParseFirstKeyboardScancode(mapping, *this);
+    return (sc == SDL_SCANCODE_UNKNOWN) ? fallback : sc;
+  };
+
+  m_touchCoin.a = keySc(get("InputCoin1", "KEY_5"), SDL_SCANCODE_5);
+  m_touchStart.a = keySc(get("InputStart1", "KEY_1"), SDL_SCANCODE_1);
+  m_touchService.a = keySc(get("InputServiceA", "KEY_F1"), SDL_SCANCODE_F1);
+  m_touchTest.a = keySc(get("InputTestA", "KEY_F2"), SDL_SCANCODE_F2);
+
+  // For left/right, we press both joy and steering if they differ, to keep menus and driving working.
+  const SDL_Scancode joyLeft = keySc(get("InputJoyLeft", "KEY_LEFT"), SDL_SCANCODE_LEFT);
+  const SDL_Scancode joyRight = keySc(get("InputJoyRight", "KEY_RIGHT"), SDL_SCANCODE_RIGHT);
+  const SDL_Scancode steerLeft = keySc(get("InputSteeringLeft", "KEY_LEFT"), SDL_SCANCODE_LEFT);
+  const SDL_Scancode steerRight = keySc(get("InputSteeringRight", "KEY_RIGHT"), SDL_SCANCODE_RIGHT);
+
+  m_touchJoyUp.a = keySc(get("InputJoyUp", "KEY_UP"), SDL_SCANCODE_UP);
+  m_touchJoyDown.a = keySc(get("InputJoyDown", "KEY_DOWN"), SDL_SCANCODE_DOWN);
+
+  m_touchJoyLeft = {joyLeft, (joyLeft != steerLeft) ? steerLeft : SDL_SCANCODE_UNKNOWN};
+  m_touchJoyRight = {joyRight, (joyRight != steerRight) ? steerRight : SDL_SCANCODE_UNKNOWN};
+  m_touchSteerLeft = {steerLeft, (steerLeft != joyLeft) ? joyLeft : SDL_SCANCODE_UNKNOWN};
+  m_touchSteerRight = {steerRight, (steerRight != joyRight) ? joyRight : SDL_SCANCODE_UNKNOWN};
+
+  m_touchThrottle.a = keySc(get("InputAccelerator", "KEY_W"), SDL_SCANCODE_W);
+  m_touchBrake.a = keySc(get("InputBrake", "KEY_S"), SDL_SCANCODE_S);
+}
+
 bool AndroidInputSystem::InitializeSystem()
 {
   std::fill(m_keys.begin(), m_keys.end(), 0);
@@ -31,6 +66,18 @@ void AndroidInputSystem::PulseKey(SDL_Scancode sc, uint32_t durationMs)
     return;
   SetKey(sc, true);
   m_pulseUntilMs[sc] = SDL_GetTicks() + durationMs;
+}
+
+void AndroidInputSystem::SetKeys(const DualScancode& sc, bool down)
+{
+  if (sc.a != SDL_SCANCODE_UNKNOWN) SetKey(sc.a, down);
+  if (sc.b != SDL_SCANCODE_UNKNOWN) SetKey(sc.b, down);
+}
+
+void AndroidInputSystem::PulseKeys(const DualScancode& sc, uint32_t durationMs)
+{
+  if (sc.a != SDL_SCANCODE_UNKNOWN) PulseKey(sc.a, durationMs);
+  if (sc.b != SDL_SCANCODE_UNKNOWN) PulseKey(sc.b, durationMs);
 }
 
 bool AndroidInputSystem::Poll()
@@ -94,31 +141,31 @@ void AndroidInputSystem::HandleControllerButtonEvent(const SDL_ControllerButtonE
   // - Back: TestA
   // - D-pad: menu navigation
   // - A/B/X/Y: map to common keys for future bindings
-  SDL_Scancode sc = SDL_SCANCODE_UNKNOWN;
+  DualScancode sc;
   switch (btn.button)
   {
-    case SDL_CONTROLLER_BUTTON_START: sc = SDL_SCANCODE_1; break;
-    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: sc = SDL_SCANCODE_5; break;
-    case SDL_CONTROLLER_BUTTON_BACK: sc = SDL_SCANCODE_F2; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_UP: sc = SDL_SCANCODE_UP; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: sc = SDL_SCANCODE_DOWN; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: sc = SDL_SCANCODE_LEFT; break;
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: sc = SDL_SCANCODE_RIGHT; break;
-    case SDL_CONTROLLER_BUTTON_A: sc = SDL_SCANCODE_Z; break;
-    case SDL_CONTROLLER_BUTTON_B: sc = SDL_SCANCODE_X; break;
-    case SDL_CONTROLLER_BUTTON_X: sc = SDL_SCANCODE_C; break;
-    case SDL_CONTROLLER_BUTTON_Y: sc = SDL_SCANCODE_V; break;
+    case SDL_CONTROLLER_BUTTON_START: sc = m_touchStart; break;
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: sc = m_touchCoin; break;
+    case SDL_CONTROLLER_BUTTON_BACK: sc = m_touchTest; break;
+    case SDL_CONTROLLER_BUTTON_DPAD_UP: sc = m_touchJoyUp; break;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: sc = m_touchJoyDown; break;
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: sc = m_touchJoyLeft; break;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: sc = m_touchJoyRight; break;
+    case SDL_CONTROLLER_BUTTON_A: sc = {SDL_SCANCODE_Z, SDL_SCANCODE_UNKNOWN}; break;
+    case SDL_CONTROLLER_BUTTON_B: sc = {SDL_SCANCODE_X, SDL_SCANCODE_UNKNOWN}; break;
+    case SDL_CONTROLLER_BUTTON_X: sc = {SDL_SCANCODE_C, SDL_SCANCODE_UNKNOWN}; break;
+    case SDL_CONTROLLER_BUTTON_Y: sc = {SDL_SCANCODE_V, SDL_SCANCODE_UNKNOWN}; break;
     default: break;
   }
 
-  if (sc == SDL_SCANCODE_UNKNOWN)
+  if (sc.a == SDL_SCANCODE_UNKNOWN && sc.b == SDL_SCANCODE_UNKNOWN)
     return;
 
   // For coin/start/test, prefer a pulse to avoid repeating while held.
-  if (down && (sc == SDL_SCANCODE_1 || sc == SDL_SCANCODE_5 || sc == SDL_SCANCODE_F1 || sc == SDL_SCANCODE_F2))
-    PulseKey(sc, 120);
+  if (down && (sc.a == m_touchStart.a || sc.a == m_touchCoin.a || sc.a == m_touchService.a || sc.a == m_touchTest.a))
+    PulseKeys(sc, 120);
   else
-    SetKey(sc, down);
+    SetKeys(sc, down);
 }
 
 void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
@@ -133,10 +180,10 @@ void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
   // - Top-right: Test (KEY_F2)
   if (down)
   {
-    if (x < 0.25f && y > 0.75f) { PulseKey(SDL_SCANCODE_5, 120); return; }
-    if (x > 0.75f && y > 0.75f) { PulseKey(SDL_SCANCODE_1, 120); return; }
-    if (x < 0.25f && y < 0.25f) { PulseKey(SDL_SCANCODE_F1, 120); return; }
-    if (x > 0.75f && y < 0.25f) { PulseKey(SDL_SCANCODE_F2, 120); return; }
+    if (x < 0.25f && y > 0.75f) { PulseKeys(m_touchCoin, 120); return; }
+    if (x > 0.75f && y > 0.75f) { PulseKeys(m_touchStart, 120); return; }
+    if (x < 0.25f && y < 0.25f) { PulseKeys(m_touchService, 120); return; }
+    if (x > 0.75f && y < 0.25f) { PulseKeys(m_touchTest, 120); return; }
   }
 
   // Held throttle/brake zone (right-middle): hold to accelerate/brake.
@@ -150,15 +197,15 @@ void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
       auto it = m_fingerHeldKey.find(tf.fingerId);
       if (it != m_fingerHeldKey.end())
       {
-        SetKey(it->second, false);
+        SetKeys(it->second, false);
         m_fingerHeldKey.erase(it);
       }
       return;
     }
 
-    SDL_Scancode pedal = (y < 0.575f) ? SDL_SCANCODE_W : SDL_SCANCODE_S;
+    DualScancode pedal = (y < 0.575f) ? m_touchThrottle : m_touchBrake;
     m_fingerHeldKey[tf.fingerId] = pedal;
-    SetKey(pedal, true);
+    SetKeys(pedal, true);
     return;
   }
 
@@ -172,7 +219,7 @@ void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
     auto it = m_fingerHeldDir.find(tf.fingerId);
     if (it != m_fingerHeldDir.end())
     {
-      SetKey(it->second, false);
+      SetKeys(it->second, false);
       m_fingerHeldDir.erase(it);
     }
     return;
@@ -184,16 +231,16 @@ void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
   const float dx = x - cx;
   const float dy = y - cy;
 
-  SDL_Scancode dir = SDL_SCANCODE_UNKNOWN;
+  DualScancode dir;
   if (std::abs(dx) > std::abs(dy))
-    dir = (dx < 0.0f) ? SDL_SCANCODE_LEFT : SDL_SCANCODE_RIGHT;
+    dir = (dx < 0.0f) ? m_touchJoyLeft : m_touchJoyRight;
   else
-    dir = (dy < 0.0f) ? SDL_SCANCODE_UP : SDL_SCANCODE_DOWN;
+    dir = (dy < 0.0f) ? m_touchJoyUp : m_touchJoyDown;
 
-  if (dir != SDL_SCANCODE_UNKNOWN)
+  if (dir.a != SDL_SCANCODE_UNKNOWN || dir.b != SDL_SCANCODE_UNKNOWN)
   {
     m_fingerHeldDir[tf.fingerId] = dir;
-    SetKey(dir, true);
+    SetKeys(dir, true);
   }
 }
 
@@ -209,14 +256,14 @@ void AndroidInputSystem::HandleTouchMotion(const SDL_TouchFingerEvent& tf)
       return;
 
     // Release previous pedal and re-evaluate based on new Y position.
-    SetKey(itKey->second, false);
+    SetKeys(itKey->second, false);
     m_fingerHeldKey.erase(itKey);
     HandleTouch(tf, true);
     return;
   }
 
   // Release previous direction and compute a new one.
-  SetKey(it->second, false);
+  SetKeys(it->second, false);
   m_fingerHeldDir.erase(it);
   HandleTouch(tf, true);
 }
@@ -247,6 +294,42 @@ SDL_Scancode AndroidInputSystem::ScancodeFromSupermodelKeyName(const char* keyNa
 
   // Try SDL's name lookup as a fallback (works for many names, albeit with different casing).
   return SDL_GetScancodeFromName(keyName);
+}
+
+SDL_Scancode AndroidInputSystem::ParseFirstKeyboardScancode(const std::string& mapping, const AndroidInputSystem& self)
+{
+  // mapping examples:
+  // - "KEY_F2"
+  // - "KEY_RIGHT,JOY1_XAXIS_POS"
+  // - "KEY_ALT+KEY_R"
+  // - "!KEY_ALT+KEY_P"
+  std::string s = mapping;
+  size_t start = 0;
+  while (start < s.size())
+  {
+    // Find next token boundary.
+    while (start < s.size() && (s[start] == ' ' || s[start] == '\t' || s[start] == ',' || s[start] == '+'))
+      start++;
+    if (start >= s.size()) break;
+
+    size_t end = start;
+    while (end < s.size() && s[end] != ' ' && s[end] != '\t' && s[end] != ',' && s[end] != '+')
+      end++;
+
+    std::string tok = s.substr(start, end - start);
+    if (!tok.empty() && tok[0] == '!')
+      tok.erase(tok.begin());
+
+    if (tok.rfind("KEY_", 0) == 0 && tok.size() > 4)
+    {
+      const std::string keyName = tok.substr(4);
+      return self.ScancodeFromSupermodelKeyName(keyName.c_str());
+    }
+
+    start = end;
+  }
+
+  return SDL_SCANCODE_UNKNOWN;
 }
 
 int AndroidInputSystem::GetKeyIndex(const char* keyName)
