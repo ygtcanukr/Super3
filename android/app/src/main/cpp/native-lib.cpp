@@ -10,6 +10,8 @@
 #include <thread>
 #include <cstring>
 
+#include <GLES3/gl3.h>
+
 #include "GameLoader.h"
 #include "Model3/Model3.h"
 #include "ROMSet.h"
@@ -24,6 +26,8 @@
 #include "BlockFile.h"
 
 #include "android_input_system.h"
+#include "gles_presenter.h"
+#include "gles_stub_render3d.h"
 
 // Minimal OSD glue -----------------------------------------------------------
 
@@ -58,7 +62,7 @@ struct Super3Host {
   AndroidInputSystem inputSystem;
   CInputs inputs{&inputSystem};
   StubOutputs outputs;
-  NullRender3D render3d;
+  GlesStubRender3D render3d;
   CRender2D render2d{config};
 
   std::unique_ptr<GameLoader> loader;
@@ -264,7 +268,6 @@ struct Super3Host {
       // it mainly keeps the input system in a sane state.
       inputs.Poll(&game, 0, 0, 496, 384);
       model3->RunFrame();
-      model3->RenderFrame();
     }
   }
 };
@@ -303,13 +306,20 @@ extern "C" int SDL_main(int argc, char* argv[]) {
     return 1;
   }
 
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
   SDL_Window* window = SDL_CreateWindow(
     "Super3 (SDL bootstrap)",
     SDL_WINDOWPOS_CENTERED,
     SDL_WINDOWPOS_CENTERED,
     1280,
     720,
-    SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+    SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL
   );
 
   if (!window) {
@@ -318,24 +328,21 @@ extern "C" int SDL_main(int argc, char* argv[]) {
     return 1;
   }
 
-  SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-  if (!renderer) {
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateRenderer failed: %s", SDL_GetError());
+  SDL_GLContext gl = SDL_GL_CreateContext(window);
+  if (!gl) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext failed: %s", SDL_GetError());
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 1;
   }
 
-  // Texture for tile-generator output (496x384 ARGB). This renders the built-in test screen.
-  SDL_Texture* tgTexture = SDL_CreateTexture(
-    renderer,
-    SDL_PIXELFORMAT_ARGB8888,
-    SDL_TEXTUREACCESS_STREAMING,
-    496,
-    384);
-  if (!tgTexture) {
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateTexture failed: %s", SDL_GetError());
-    SDL_DestroyRenderer(renderer);
+  SDL_GL_MakeCurrent(window, gl);
+  SDL_GL_SetSwapInterval(1);
+
+  GlesPresenter presenter;
+  if (!presenter.Init()) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GlesPresenter.Init failed");
+    SDL_GL_DeleteContext(gl);
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 1;
@@ -466,45 +473,27 @@ extern "C" int SDL_main(int argc, char* argv[]) {
       host.RunFrame();
     }
 
-    // Present the tile generator framebuffer if available; otherwise clear to black.
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0xFF);
-    SDL_RenderClear(renderer);
+    int winW = 0, winH = 0;
+    SDL_GL_GetDrawableSize(window, &winW, &winH);
+    presenter.Resize(winW, winH);
+
+    glClearColor(0.f, 0.f, 0.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     if (state == 1 && host.render2d.HasFrame()) {
       const uint32_t* pixels = host.render2d.GetFrameBufferRGBA();
-      const int pitch = (int)(host.render2d.GetFrameWidth() * sizeof(uint32_t));
-      if (SDL_UpdateTexture(tgTexture, nullptr, pixels, pitch) != 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_UpdateTexture failed: %s", SDL_GetError());
-      } else {
-        int winW = 0, winH = 0;
-        SDL_GetRendererOutputSize(renderer, &winW, &winH);
-        const int srcW = (int)host.render2d.GetFrameWidth();
-        const int srcH = (int)host.render2d.GetFrameHeight();
+      presenter.UpdateFrameARGB(pixels, (int)host.render2d.GetFrameWidth(), (int)host.render2d.GetFrameHeight());
+      presenter.Render();
 
-        // Preserve aspect ratio (letterbox/pillarbox).
-        float scale = std::min((float)winW / (float)srcW, (float)winH / (float)srcH);
-        SDL_Rect dst{};
-        dst.w = (int)(srcW * scale);
-        dst.h = (int)(srcH * scale);
-        dst.x = (winW - dst.w) / 2;
-        dst.y = (winH - dst.h) / 2;
-        SDL_RenderCopy(renderer, tgTexture, nullptr, &dst);
-      }
+      // Debug: draw a small triangle on top so we can verify GLES is working
+      // and we have a valid 3D hook. The real integration will happen inside
+      // the GPU/TileGen render path once New3D is ported.
+      host.render3d.BeginFrame();
+      host.render3d.RenderFrame();
+      host.render3d.EndFrame();
     }
 
-    SDL_RenderPresent(renderer);
-    if (SDL_GetError()[0] != '\0') {
-      // SDL doesn't always surface present errors via return codes; log and clear.
-      SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL error after present: %s", SDL_GetError());
-      // If the EGL surface has gone away (background/minimize), stop rendering
-      // until we get a foreground/surface recreation event.
-      if (strstr(SDL_GetError(), "EGL_BAD_SURFACE") != nullptr ||
-          strstr(SDL_GetError(), "unable to show color buffer") != nullptr) {
-        backgrounded = true;
-        SDL_Log("Detected bad surface; pausing rendering until foreground");
-      }
-      SDL_ClearError();
-    }
+    SDL_GL_SwapWindow(window);
 
     uint32_t t = SDL_GetTicks();
     if (t - lastStatusLog > 2000) {
@@ -513,12 +502,12 @@ extern "C" int SDL_main(int argc, char* argv[]) {
     }
   }
 
-  SDL_DestroyTexture(tgTexture);
+  presenter.Shutdown();
   if (loadState.load(std::memory_order_acquire) == 1) {
     host.SaveNVRAM();
   }
   CloseAudio();
-  SDL_DestroyRenderer(renderer);
+  SDL_GL_DeleteContext(gl);
   SDL_DestroyWindow(window);
   SDL_Quit();
   return 0;

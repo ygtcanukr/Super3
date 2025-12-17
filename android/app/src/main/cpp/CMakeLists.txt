@@ -112,6 +112,8 @@ add_library(super3 SHARED
   android_shim.cpp
   model3_stubs.cpp
   android_input_system.cpp
+  gles_presenter.cpp
+  gles_stub_render3d.cpp
   render2d_android.cpp
   ${SUPER3_SOURCES}
   ${M68K_GENERATED_SOURCES}
@@ -129,10 +131,14 @@ target_include_directories(super3 PRIVATE
 find_library(log-lib log)
 find_library(android-lib android)
 find_library(z-lib z)
+find_library(egl-lib EGL)
+find_library(glesv3-lib GLESv3)
 
 target_link_libraries(super3 PRIVATE
   ${log-lib}
   ${android-lib}
   ${z-lib}
+  ${egl-lib}
+  ${glesv3-lib}
   SDL2::SDL2 # present when SUPER3_FETCH_SDL2 is ON
 )
