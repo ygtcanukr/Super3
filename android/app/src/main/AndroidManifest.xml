@@ -1,0 +1,28 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <application
+    android:label="SUPER3"
+    android:icon="@mipmap/ic_launcher"
+    android:roundIcon="@mipmap/ic_launcher_round"
+    android:allowBackup="true"
+    android:supportsRtl="true"
+    android:theme="@style/Theme.Super3">
+
+    <activity
+      android:name=".Super3Activity"
+      android:screenOrientation="sensorLandscape"
+      android:exported="true">
+
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+
+      <!-- Tell SDL which native library to load -->
+      <meta-data
+        android:name="SDL_MAIN_LIBRARY"
+        android:value="super3" />
+    </activity>
+
+  </application>
+</manifest>

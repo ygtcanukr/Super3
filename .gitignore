@@ -1,0 +1,72 @@
+# Build output
+bin/
+obj/
+bin64/
+obj64/
+build/
+out/
+dist/
+target/
+Debug/
+Release/
+x64/
+x86/
+
+# Compiled artifacts
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.exp
+*.pdb
+*.idb
+*.ilk
+*.ipdb
+*.iobj
+*.pch
+
+# Generated files
+*.nv
+Makefile
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.bz2
+*.7z
+*.rar
+
+# Android/Gradle
+android/.gradle/
+android/.idea/
+android/local.properties
+android/*.iml
+android/**/build/
+android/**/.cxx/
+
+# IDE/Editor
+.idea/
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+
+# OS-generated
+.DS_Store
+Thumbs.db
+desktop.ini

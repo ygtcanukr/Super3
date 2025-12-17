@@ -1,0 +1,5 @@
+<resources>
+  <style name="Theme.Super3" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <!-- Customize your theme here. -->
+  </style>
+</resources>
