@@ -316,6 +316,9 @@ struct Super3Host {
         (game.inputs & (Game::INPUT_GUN1 | Game::INPUT_GUN2 | Game::INPUT_ANALOG_GUN1 | Game::INPUT_ANALOG_GUN2)) != 0;
       inputSystem.SetGunTouchEnabled(gunGame);
 
+      const bool vehicleGame = (game.inputs & (Game::INPUT_VEHICLE | Game::INPUT_HARLEY)) != 0;
+      inputSystem.SetVirtualWheelEnabled(vehicleGame);
+
       // Apply Supermodel.ini overrides (Global + [ game ]) after the loader has determined game->name.
       ApplyIniOverrides(game.name);
       ApplyAndroidHardOverrides();

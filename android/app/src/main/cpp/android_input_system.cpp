@@ -12,6 +12,22 @@ AndroidInputSystem::AndroidInputSystem()
   std::strncpy(m_mouseDetails.name, "Touchscreen", MAX_NAME_LENGTH);
   m_mouseDetails.name[MAX_NAME_LENGTH] = '\0';
   m_mouseDetails.isAbsolute = true;
+
+  std::memset(&m_virtualJoyDetails, 0, sizeof(m_virtualJoyDetails));
+  std::strncpy(m_virtualJoyDetails.name, "Touch Wheel", MAX_NAME_LENGTH);
+  m_virtualJoyDetails.name[MAX_NAME_LENGTH] = '\0';
+  m_virtualJoyDetails.numAxes = 6;
+  m_virtualJoyDetails.numPOVs = 0;
+  m_virtualJoyDetails.numButtons = 0;
+  m_virtualJoyDetails.hasFFeedback = false;
+  for (int a = 0; a < NUM_JOY_AXES; a++)
+  {
+    m_virtualJoyDetails.hasAxis[a] = false;
+    m_virtualJoyDetails.axisHasFF[a] = false;
+    std::strncpy(m_virtualJoyDetails.axisName[a], GetDefaultAxisName(a), MAX_NAME_LENGTH);
+    m_virtualJoyDetails.axisName[a][MAX_NAME_LENGTH] = '\0';
+  }
+  m_virtualJoyDetails.hasAxis[AXIS_X] = true;
 }
 
 AndroidInputSystem::~AndroidInputSystem()
@@ -31,6 +47,37 @@ void AndroidInputSystem::SetGunTouchEnabled(bool enabled)
   m_mouseWheelDir = 0;
   std::memset(m_mouseButtons, 0, sizeof(m_mouseButtons));
   std::memset(m_mouseButtonPulseUntilMs, 0, sizeof(m_mouseButtonPulseUntilMs));
+}
+
+void AndroidInputSystem::SetVirtualWheelEnabled(bool enabled)
+{
+  if (m_virtualWheelEnabled == enabled)
+    return;
+  m_virtualWheelEnabled = enabled;
+  m_wheelFingerActive = false;
+  m_wheelFinger = 0;
+  m_virtualJoyX = 0;
+}
+
+bool AndroidInputSystem::UseVirtualWheel() const
+{
+  return m_virtualWheelEnabled && m_controllers.empty();
+}
+
+void AndroidInputSystem::SetVirtualSteerFromEncoded(float encodedX)
+{
+  // encodedX comes from Java as [(steer+1)/2], where steer is in [-1,1].
+  const float steer = std::clamp((encodedX - 0.5f) * 2.0f, -1.0f, 1.0f);
+  constexpr float deadzone = 0.08f;
+  if (std::abs(steer) < deadzone)
+  {
+    m_virtualJoyX = 0;
+    return;
+  }
+
+  const float scaled = (std::abs(steer) - deadzone) / (1.0f - deadzone);
+  const float signedScaled = (steer < 0.0f) ? -scaled : scaled;
+  m_virtualJoyX = (int)std::lround(std::clamp(signedScaled, -1.0f, 1.0f) * 32767.0f);
 }
 
 void AndroidInputSystem::ApplyConfig(const Util::Config::Node& config)
@@ -81,6 +128,9 @@ bool AndroidInputSystem::InitializeSystem()
   std::memset(m_mouseButtonPulseUntilMs, 0, sizeof(m_mouseButtonPulseUntilMs));
   m_gunFingerActive = false;
   m_gunFinger = 0;
+  m_wheelFingerActive = false;
+  m_wheelFinger = 0;
+  m_virtualJoyX = 0;
 
   SDL_GameControllerEventState(SDL_ENABLE);
   RefreshControllers();
@@ -215,6 +265,32 @@ void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
   const float x = tf.x;
   const float y = tf.y;
 
+  // Virtual steering wheel (racing games): encoded in tf.x from Java and keyed by a fixed fingerId.
+  if (UseVirtualWheel())
+  {
+    constexpr SDL_FingerID kWheelFingerId = 1107;
+    if (down)
+    {
+      if (!m_wheelFingerActive && tf.fingerId == kWheelFingerId)
+      {
+        m_wheelFingerActive = true;
+        m_wheelFinger = tf.fingerId;
+        SetVirtualSteerFromEncoded(x);
+        return;
+      }
+    }
+    else
+    {
+      if (m_wheelFingerActive && tf.fingerId == m_wheelFinger)
+      {
+        SetVirtualSteerFromEncoded(0.5f);
+        m_wheelFingerActive = false;
+        m_wheelFinger = 0;
+        return;
+      }
+    }
+  }
+
   // Tap zones (momentary):
   // - Bottom-left: Coin (KEY_5)
   // - Bottom-middle: Start (KEY_1)
@@ -320,6 +396,15 @@ void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
 
 void AndroidInputSystem::HandleTouchMotion(const SDL_TouchFingerEvent& tf)
 {
+  if (UseVirtualWheel())
+  {
+    if (m_wheelFingerActive && tf.fingerId == m_wheelFinger)
+    {
+      SetVirtualSteerFromEncoded(tf.x);
+      return;
+    }
+  }
+
   if (m_gunTouchEnabled)
   {
     if (m_gunFingerActive && tf.fingerId == m_gunFinger)
@@ -500,11 +585,20 @@ void AndroidInputSystem::RefreshControllers()
 
 int AndroidInputSystem::GetNumJoysticks()
 {
+  if (UseVirtualWheel())
+    return 1;
   return static_cast<int>(m_controllers.size());
 }
 
 const JoyDetails* AndroidInputSystem::GetJoyDetails(int joyNum)
 {
+  if (UseVirtualWheel())
+  {
+    if (joyNum == ANY_JOYSTICK || joyNum == 0)
+      return &m_virtualJoyDetails;
+    return nullptr;
+  }
+
   if (joyNum < 0 || joyNum >= static_cast<int>(m_controllers.size()))
     return nullptr;
   return &m_controllers[static_cast<size_t>(joyNum)].details;
@@ -573,6 +667,13 @@ bool AndroidInputSystem::ButtonPressedFor(const ControllerState& c, int butNum) 
 
 int AndroidInputSystem::GetJoyAxisValue(int joyNum, int axisNum)
 {
+  if (UseVirtualWheel())
+  {
+    if (axisNum == AXIS_X)
+      return m_virtualJoyX;
+    return 0;
+  }
+
   if (m_controllers.empty())
     return 0;
 

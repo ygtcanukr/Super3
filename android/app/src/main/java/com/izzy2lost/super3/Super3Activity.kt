@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import java.io.File
@@ -62,6 +63,9 @@ class Super3Activity : SDLActivity() {
                 GameInputsIndex.hasAnyInputType(gamesXml, game, setOf("vehicle", "harley"))
 
         overlay.findViewById<LinearLayout>(R.id.overlay_pedals)?.visibility =
+            if (isRacing) View.VISIBLE else View.GONE
+
+        overlay.findViewById<ImageButton>(R.id.overlay_wheel)?.visibility =
             if (isRacing) View.VISIBLE else View.GONE
 
         fun nativeTouch(action: Int, fingerId: Int, x: Float, y: Float, p: Float = 1.0f) {
@@ -126,6 +130,44 @@ class Super3Activity : SDLActivity() {
             // Match the native pedal zone (right-middle), independent of UI placement.
             bindHeld(R.id.overlay_gas, fingerId = 1103, x = 0.85f, y = 0.35f)
             bindHeld(R.id.overlay_brake, fingerId = 1104, x = 0.85f, y = 0.80f)
+
+            val wheel = overlay.findViewById<ImageButton>(R.id.overlay_wheel)
+            wheel?.setOnTouchListener { v, ev ->
+                val w = v.width.toFloat().coerceAtLeast(1f)
+                val cx = w / 2f
+                val dx = (ev.x - cx) / cx
+                val steer = dx.coerceIn(-1f, 1f)
+
+                v.rotation = steer * 75f
+
+                val encodedX = ((steer + 1f) / 2f).coerceIn(0f, 1f)
+                val encodedY = 0.5f
+
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        v.alpha = 0.75f
+                        nativeTouch(MotionEvent.ACTION_DOWN, 1107, encodedX, encodedY)
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        nativeTouch(MotionEvent.ACTION_MOVE, 1107, encodedX, encodedY)
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        v.alpha = 1.0f
+                        v.rotation = 0f
+                        nativeTouch(MotionEvent.ACTION_UP, 1107, 0.5f, encodedY)
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        v.alpha = 1.0f
+                        v.rotation = 0f
+                        nativeTouch(MotionEvent.ACTION_UP, 1107, 0.5f, encodedY)
+                        true
+                    }
+                    else -> true
+                }
+            }
         }
     }
 

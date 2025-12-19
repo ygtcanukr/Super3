@@ -21,6 +21,7 @@ public:
   ~AndroidInputSystem() override;
 
   void SetGunTouchEnabled(bool enabled);
+  void SetVirtualWheelEnabled(bool enabled);
 
   // Called from the SDL event loop (main thread).
   void HandleEvent(const SDL_Event& ev);
@@ -73,6 +74,9 @@ private:
   void RefreshControllers();
   void CloseControllers();
 
+  bool UseVirtualWheel() const;
+  void SetVirtualSteerFromEncoded(float encodedX);
+
   void SetKey(SDL_Scancode sc, bool down);
   void PulseKey(SDL_Scancode sc, uint32_t durationMs);
   void SetKeys(const DualScancode& sc, bool down);
@@ -113,6 +117,12 @@ private:
   bool m_gunTouchEnabled = false;
   SDL_FingerID m_gunFinger = 0;
   bool m_gunFingerActive = false;
+
+  bool m_virtualWheelEnabled = false;
+  SDL_FingerID m_wheelFinger = 0;
+  bool m_wheelFingerActive = false;
+  int m_virtualJoyX = 0;
+  JoyDetails m_virtualJoyDetails{};
 
   MouseDetails m_mouseDetails{};
   int m_mouseX = 0;
