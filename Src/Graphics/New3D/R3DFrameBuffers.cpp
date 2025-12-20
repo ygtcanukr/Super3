@@ -226,7 +226,7 @@ void R3DFrameBuffers::AllocShaderBase()
 	const char *fragmentShader = R"glsl(
 
 	#version 300 es
-	precision mediump float;
+	precision highp float;
 
 	uniform sampler2D tex1;
 	in vec2 fsTexCoord;
@@ -234,7 +234,12 @@ void R3DFrameBuffers::AllocShaderBase()
 
 	void main()
 	{
-		vec4 colBase = texture(tex1, fsTexCoord);
+		// Clamp to half-texel to avoid sampling outside the FBO due to precision/edge interpolation,
+		// which can show up as thin lines/flicker on some GLES drivers (e.g., FMVs).
+		vec2 texSize = vec2(textureSize(tex1, 0));
+		vec2 halfTexel = 0.5 / max(texSize, vec2(1.0));
+		vec2 uv = clamp(fsTexCoord, halfTexel, vec2(1.0) - halfTexel);
+		vec4 colBase = texture(tex1, uv);
 		if(colBase.a < 1.0) discard;
 		oColor = colBase;
 	}
@@ -308,7 +313,7 @@ void R3DFrameBuffers::AllocShaderTrans()
 	const char *fragmentShader = R"glsl(
 
 	#version 300 es
-	precision mediump float;
+	precision highp float;
 
 	uniform sampler2D tex1;
 	uniform sampler2D tex2;
@@ -318,8 +323,11 @@ void R3DFrameBuffers::AllocShaderTrans()
 
 	void main()
 	{
-		vec4 colTrans1 = texture(tex1, fsTexCoord);
-		vec4 colTrans2 = texture(tex2, fsTexCoord);
+		vec2 texSize = vec2(textureSize(tex1, 0));
+		vec2 halfTexel = 0.5 / max(texSize, vec2(1.0));
+		vec2 uv = clamp(fsTexCoord, halfTexel, vec2(1.0) - halfTexel);
+		vec4 colTrans1 = texture(tex1, uv);
+		vec4 colTrans2 = texture(tex2, uv);
 
 		if(colTrans1.a + colTrans2.a > 0.0) {
 			vec3 col1 = colTrans1.rgb * colTrans1.a;
@@ -412,7 +420,7 @@ void R3DFrameBuffers::AllocShaderWipe()
 	const char *fragmentShader = R"glsl(
 
 	#version 300 es
-	precision mediump float;
+	precision highp float;
 
 	uniform sampler2D texColor;
 	in vec2 fsTexCoord;
@@ -422,7 +430,10 @@ void R3DFrameBuffers::AllocShaderWipe()
 
 	void main()
 	{
-		vec4 colBase = texture(texColor, fsTexCoord);
+		vec2 texSize = vec2(textureSize(texColor, 0));
+		vec2 halfTexel = 0.5 / max(texSize, vec2(1.0));
+		vec2 uv = clamp(fsTexCoord, halfTexel, vec2(1.0) - halfTexel);
+		vec4 colBase = texture(texColor, uv);
 		if(colBase.a == 0.0) {
 			discard;
 		}

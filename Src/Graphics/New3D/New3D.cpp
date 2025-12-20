@@ -407,6 +407,42 @@ void CNew3D::RenderFrame(void)
 		return;
 	}
 #endif
+#ifdef __ANDROID__
+	struct ScopedAndroidGlState
+	{
+		GLboolean scissorEnabled = GL_FALSE;
+		GLint scissorBox[4] = {0, 0, 0, 0};
+		GLfloat clearColor[4] = {0.f, 0.f, 0.f, 0.f};
+
+		ScopedAndroidGlState()
+		{
+			scissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+			glGetIntegerv(GL_SCISSOR_BOX, scissorBox);
+			glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
+		}
+
+		void DisableScissor() const { glDisable(GL_SCISSOR_TEST); }
+
+		void RestoreScissor() const
+		{
+			if (scissorEnabled) {
+				glEnable(GL_SCISSOR_TEST);
+				glScissor(scissorBox[0], scissorBox[1], scissorBox[2], scissorBox[3]);
+			} else {
+				glDisable(GL_SCISSOR_TEST);
+			}
+		}
+
+		void SetTransparentClear() const { glClearColor(0.f, 0.f, 0.f, 0.f); }
+
+		~ScopedAndroidGlState()
+		{
+			glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+			RestoreScissor();
+		}
+	};
+#endif
+
 	for (int i = 0; i < 4; i++) {
 		m_nfPairs[i].zNear = -std::numeric_limits<float>::max();
 		m_nfPairs[i].zFar  =  std::numeric_limits<float>::max();
@@ -453,7 +489,28 @@ void CNew3D::RenderFrame(void)
 		}
 	}
 
+#ifdef __ANDROID__
+	ScopedAndroidGlState glState;
+	// Use transparent clears for FBO bookkeeping (alpha==0 means "no pixel written").
+	glState.SetTransparentClear();
+	glState.DisableScissor(); // scissor from outer SDL code would break FBO clears and cause flickering edges
+#endif
+
 	if (!m_r3dFrameBuffers) return;
+
+#ifdef __ANDROID__
+	// The desktop New3D path assumes the default framebuffer starts cleared each frame.
+	// Without this, any pixels discarded during compositing (alpha==0 areas) can reveal stale
+	// contents which show up as thin lines/flicker (notably during FMVs).
+	m_r3dFrameBuffers->SetFBO(Layer::none);
+	glViewport(0, 0, (GLsizei)m_totalXRes, (GLsizei)m_totalYRes);
+	glClearColor(0.f, 0.f, 0.f, 1.f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	// Restore transparent clear for offscreen layers.
+	glState.SetTransparentClear();
+#endif
+
+	glViewport(0, 0, (GLsizei)m_totalXRes, (GLsizei)m_totalYRes);
 	m_r3dFrameBuffers->SetFBO(Layer::trans12);
 	glClear(GL_COLOR_BUFFER_BIT);					// wipe both trans layers
 
@@ -465,6 +522,7 @@ void CNew3D::RenderFrame(void)
 
 			bool renderOverlay = (i == 1);
 
+			glViewport(0, 0, (GLsizei)m_totalXRes, (GLsizei)m_totalYRes);
 			m_r3dFrameBuffers->SetFBO(Layer::colour);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
@@ -479,7 +537,12 @@ void CNew3D::RenderFrame(void)
 
 			DisableRenderStates();
 
+#ifdef __ANDROID__
+			// DrawOverTransLayers writes to the offscreen trans buffers.
+			glState.DisableScissor();
+#endif
 			m_r3dFrameBuffers->DrawOverTransLayers();			// mask trans layer with opaque pixels
+
 			m_r3dFrameBuffers->CompositeBaseLayer();				// copy opaque pixels to back buffer
 
 			SetRenderStates();
