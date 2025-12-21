@@ -42,7 +42,7 @@ void main()
 static const char *fragmentShaderR3D = R"glsl(
 
 #version 300 es
-precision highp float;
+precision mediump float;
 
 in vec2 vTexCoord;
 in vec4 vColor;
@@ -54,73 +54,27 @@ uniform bool textureEnabled;
 uniform bool textureAlpha;
 uniform bool alphaTest;
 uniform bool discardAlpha;
-uniform vec2 baseTexSize;
-uniform ivec2 textureWrapMode;
 
 out vec4 oColor;
-
-float WrapCoord1D(float u, int wrapMode, float halfTexel)
-{
-  // Matches desktop shader wrap modes:
-  // 0 = repeat, 1 = repeat+clamp, 2/3 = mirror/mirror+clamp.
-  if (wrapMode == 0) {
-    return fract(u);
-  }
-  if (wrapMode == 1) {
-    u = fract(u);
-    return clamp(u, halfTexel, 1.0 - halfTexel);
-  }
-
-  float m = mod(u, 2.0);
-  u = (m < 1.0) ? m : (2.0 - m);
-  return clamp(u, halfTexel, 1.0 - halfTexel);
-}
-
-vec2 WrapTexCoord(vec2 uv)
-{
-  vec2 texSize = max(baseTexSize, vec2(1.0));
-  vec2 halfTexel = 0.5 / texSize;
-  uv.x = WrapCoord1D(uv.x, textureWrapMode.x, halfTexel.x);
-  uv.y = WrapCoord1D(uv.y, textureWrapMode.y, halfTexel.y);
-  return uv;
-}
 
 void main()
 {
   vec4 col = vColor;
-  vec4 t = vec4(1.0);
+
   if (textureEnabled) {
-    vec2 uv = WrapTexCoord(vTexCoord);
-    t = texture(tex1, uv);
+    vec4 t = texture(tex1, vTexCoord);
+    if (textureAlpha) {
+      col *= t;
+    } else {
+      col.rgb *= t.rgb;
+    }
   }
 
   // keep vDummy "used"
   col.rgb += vDummy * 0.0;
 
-  // Match Supermodel's per-pixel alpha rules as closely as possible:
-  // - alphaTest is based on texture alpha
-  // - discardAlpha separates opaque vs translucent passes based on texture alpha (and vertex alpha in 2nd pass)
-  if (alphaTest && t.a < (32.0/255.0)) discard;
-  if (textureAlpha) {
-    if (discardAlpha) {
-      if (t.a < 1.0) discard;
-    } else {
-      if ((t.a * col.a) >= 1.0) discard;
-    }
-  }
-
-  if (textureEnabled) {
-    col.rgb *= t.rgb;
-    if (textureAlpha) {
-      col.a *= t.a;
-    }
-  }
-
-  if (discardAlpha) {
-    // Opaque pass: force alpha to 1.0 so FBO compositing can treat "written"
-    // pixels as fully opaque (avoids black speckles/lines from alpha < 1).
-    col.a = 1.0;
-  }
+  if (alphaTest && col.a < 0.5) discard;
+  if (discardAlpha && col.a < 0.99) discard;
 
   oColor = col;
 }

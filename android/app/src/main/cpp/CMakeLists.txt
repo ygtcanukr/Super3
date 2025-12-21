@@ -90,20 +90,6 @@ if(TO_REMOVE)
   list(REMOVE_ITEM SUPER3_SOURCES ${TO_REMOVE})
 endif()
 
-# --- New3D (Real3D renderer) ---
-# Desktop builds compile additional OpenGL2.1/GLEW renderers under Src/Graphics,
-# but Android uses GLES3 with a custom presenter, so we only include New3D.
-file(GLOB NEW3D_SOURCES "${REPO_ROOT}/Src/Graphics/New3D/*.cpp")
-
-# Normalize paths to forward slashes so downstream tooling behaves consistently.
-set(NEW3D_SOURCES_NORM "")
-foreach(src ${NEW3D_SOURCES})
-  string(REPLACE "\\" "/" src_norm "${src}")
-  list(APPEND NEW3D_SOURCES_NORM "${src_norm}")
-endforeach()
-set(NEW3D_SOURCES "${NEW3D_SOURCES_NORM}")
-list(SORT NEW3D_SOURCES)
-
 # --- SDL2 (for future Android OSD wiring) ---
 # Prefer a local checkout if provided via -DSDL2_LOCAL_DIR, otherwise fetch the
 # latest release tarball.
@@ -129,7 +115,19 @@ add_library(super3 SHARED
   gles_presenter.cpp
   gles_stub_render3d.cpp
   render2d_android.cpp
-  ${NEW3D_SOURCES}
+  "${REPO_ROOT}/Src/Graphics/New3D/Mat4.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/GLSLShader.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/Model.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/New3D.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/PolyHeader.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/R3DFloat.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/R3DFrameBuffers.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/R3DShader.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/R3DScrollFog.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/Texture.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/TextureSheet.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/VBO.cpp"
+  "${REPO_ROOT}/Src/Graphics/New3D/Vec.cpp"
   ${SUPER3_SOURCES}
   ${M68K_GENERATED_SOURCES}
 )
