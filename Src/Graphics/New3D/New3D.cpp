@@ -3,6 +3,7 @@
 #include "Vec.h"
 #include <cmath>
 #include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <cstring>
 #include <unordered_map>
@@ -284,6 +285,40 @@ bool CNew3D::SkipLayer(int layer)
 	return true;
 }
 
+namespace {
+struct FVertexOffsets
+{
+	std::size_t pos;
+	std::size_t normal;
+	std::size_t texcoords;
+	std::size_t fixedShade;
+	std::size_t faceColour;
+	std::size_t faceNormal;
+};
+
+static void* VboOffset(std::size_t offset)
+{
+	return reinterpret_cast<void*>(static_cast<std::uintptr_t>(offset));
+}
+
+static const FVertexOffsets& GetFVertexOffsets()
+{
+	static const FVertexOffsets offsets = [] {
+		FVertex v {};
+		const auto* base = reinterpret_cast<const unsigned char*>(&v);
+		return FVertexOffsets {
+			static_cast<std::size_t>(reinterpret_cast<const unsigned char*>(v.pos) - base),
+			static_cast<std::size_t>(reinterpret_cast<const unsigned char*>(v.normal) - base),
+			static_cast<std::size_t>(reinterpret_cast<const unsigned char*>(v.texcoords) - base),
+			static_cast<std::size_t>(reinterpret_cast<const unsigned char*>(&v.fixedShade) - base),
+			static_cast<std::size_t>(reinterpret_cast<const unsigned char*>(v.faceColour) - base),
+			static_cast<std::size_t>(reinterpret_cast<const unsigned char*>(v.faceNormal) - base),
+		};
+	}();
+	return offsets;
+}
+} // namespace
+
 void CNew3D::SetRenderStates()
 {
 	m_vbo.Bind(true);
@@ -297,12 +332,13 @@ void CNew3D::SetRenderStates()
 	glEnableVertexAttribArray(5);
 
 	// before draw, specify vertex and index arrays with their offsets, offsetof is maybe evil ..
-	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inVertex"), 4, GL_FLOAT, GL_FALSE, sizeof(FVertex), 0);
-	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(FVertex), (void*)offsetof(FVertex, normal));
-	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inTexCoord"), 2, GL_FLOAT, GL_FALSE, sizeof(FVertex), (void*)offsetof(FVertex, texcoords));
-	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inColour"), 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(FVertex), (void*)offsetof(FVertex, faceColour));
-	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inFaceNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(FVertex), (void*)offsetof(FVertex, faceNormal));
-	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inFixedShade"), 1, GL_FLOAT, GL_FALSE, sizeof(FVertex), (void*)offsetof(FVertex, fixedShade));
+	const auto& offsets = GetFVertexOffsets();
+	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inVertex"), 4, GL_FLOAT, GL_FALSE, sizeof(FVertex), VboOffset(offsets.pos));
+	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(FVertex), VboOffset(offsets.normal));
+	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inTexCoord"), 2, GL_FLOAT, GL_FALSE, sizeof(FVertex), VboOffset(offsets.texcoords));
+	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inColour"), 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(FVertex), VboOffset(offsets.faceColour));
+	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inFaceNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(FVertex), VboOffset(offsets.faceNormal));
+	glVertexAttribPointer(m_r3dShader.GetVertexAttribPos("inFixedShade"), 1, GL_FLOAT, GL_FALSE, sizeof(FVertex), VboOffset(offsets.fixedShade));
 
 	glDepthFunc		(GL_LEQUAL);
 	glEnable		(GL_DEPTH_TEST);

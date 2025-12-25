@@ -11,6 +11,7 @@ This app does **not** include any games, ROMs, BIOS files, or copyrighted game c
 - Virtual on-screen steering wheel for driving games (when supported by the title).
 - Save states (10 slots) with automatic screenshot thumbnails and tap-to-preview.
 - In-game pause/resume button.
+- Game flyers (front/back) in the launcher list.
 
 ## Video settings (Resolution & Widescreen)
 From the main game list, open the side menu (toolbar "menu" icon) and look under **Video**.
@@ -27,6 +28,10 @@ These settings are written to `.../Android/data/<package>/files/super3/Config/Su
 - Save states and thumbnails are stored under the app's user data directory in `Saves/` (for example: `.../Android/data/<package>/files/super3/Saves/`).
 - The app may offer an optional "sync"/export workflow using Android's Storage Access Framework. If enabled, the app only accesses the folder(s) you explicitly choose.
 
+## Flyers
+- Flyers are installed to `.../Android/data/<package>/files/super3/Flyers/` as `<game>_front.png` and `<game>_back.png`.
+- You can replace or add files in that folder to customize artwork.
+
 ## Legal / Google Play Policy Notes
 - **No games included:** SUPER3 does not ship with ROMs or game data, and it is not intended to facilitate piracy.
 - **You must own the games:** Only use ROMs you are legally permitted to use in your region.
@@ -34,7 +39,7 @@ These settings are written to `.../Android/data/<package>/files/super3/Config/Su
 - **Not affiliated:** This project is not affiliated with or endorsed by SEGA or any arcade hardware manufacturer.
 
 ## Privacy
-- SUPER3 does not require the `INTERNET` permission and is designed to run offline.
+- SUPER3 is designed to run offline and does not require network access.
 - The app stores emulator settings, save states, and screenshots locally on your device.
 - If you opt into selecting a user folder for syncing/export, access is limited to the folder you select via the system file picker.
 

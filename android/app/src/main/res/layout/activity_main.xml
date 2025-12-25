@@ -27,15 +27,34 @@
         app:navigationIcon="@drawable/ic_menu_24"
         app:navigationIconTint="?attr/colorOnPrimary">
 
-        <com.google.android.material.search.SearchBar
-          android:id="@+id/search_bar"
+        <LinearLayout
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
+          android:orientation="horizontal"
+          android:gravity="center_vertical"
           android:layout_marginStart="8dp"
-          android:layout_marginEnd="8dp"
-          android:hint="Search games"
-          app:liftOnScroll="true"
-          app:liftOnScrollColor="?attr/colorSurfaceContainerHighest" />
+          android:layout_marginEnd="8dp">
+
+          <com.google.android.material.search.SearchBar
+            android:id="@+id/search_bar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Search games"
+            app:liftOnScroll="true"
+            app:liftOnScrollColor="?attr/colorSurfaceContainerHighest" />
+
+          <ImageButton
+            android:id="@+id/btn_view_mode"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Change view"
+            android:src="@drawable/view_list_24px"
+            android:tint="?attr/colorOnPrimary" />
+
+        </LinearLayout>
 
       </com.google.android.material.appbar.MaterialToolbar>
 
@@ -85,7 +104,7 @@
     android:layout_height="match_parent"
     android:layout_gravity="start"
     android:fitsSystemWindows="true"
-    android:background="?attr/colorPrimary"
+    android:background="@drawable/drawer_background_rounded"
     app:menu="@menu/drawer_menu"
     app:headerLayout="@layout/nav_header"
     app:itemTextColor="?attr/colorOnPrimary"

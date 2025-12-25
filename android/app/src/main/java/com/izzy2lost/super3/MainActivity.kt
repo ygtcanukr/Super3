@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,10 +15,12 @@ import androidx.core.view.GravityCompat
 import androidx.core.widget.addTextChangedListener
 import androidx.documentfile.provider.DocumentFile
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.navigation.NavigationView
 import com.google.android.material.search.SearchBar
 import com.google.android.material.search.SearchView
@@ -25,6 +28,8 @@ import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.concurrent.thread
+
+enum class GameListViewMode { LIST, FLYERS }
 
 class MainActivity : AppCompatActivity() {
     private val prefs by lazy { getSharedPreferences("super3_prefs", MODE_PRIVATE) }
@@ -34,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: MaterialToolbar
     private lateinit var searchBar: SearchBar
     private lateinit var searchView: SearchView
+    private lateinit var btnViewMode: ImageButton
 
     private lateinit var gamesFolderText: TextView
     private lateinit var userFolderText: TextView
@@ -54,6 +60,7 @@ class MainActivity : AppCompatActivity() {
 
     private var games: List<GameDef> = emptyList()
     private var zipDocs: Map<String, DocumentFile> = emptyMap()
+    private var viewMode: GameListViewMode = GameListViewMode.FLYERS
 
     @Volatile
     private var scanning = false
@@ -111,6 +118,7 @@ class MainActivity : AppCompatActivity() {
         toolbar = findViewById(R.id.toolbar)
         searchBar = findViewById(R.id.search_bar)
         searchView = findViewById(R.id.search_view)
+        btnViewMode = findViewById(R.id.btn_view_mode)
         gamesList = findViewById(R.id.games_list)
         searchResultsList = findViewById(R.id.search_results_list)
 
@@ -197,6 +205,17 @@ class MainActivity : AppCompatActivity() {
             gamesAdapter.setFilter(editable?.toString().orEmpty())
         }
 
+        viewMode = loadViewMode()
+        btnViewMode.setOnClickListener {
+            viewMode =
+                when (viewMode) {
+                    GameListViewMode.LIST -> GameListViewMode.FLYERS
+                    GameListViewMode.FLYERS -> GameListViewMode.LIST
+                }
+            saveViewMode(viewMode)
+            applyViewMode(viewMode)
+        }
+
         loadPrefs()
         games = GameXml.parseGamesXmlFromAssets(this)
 
@@ -204,6 +223,7 @@ class MainActivity : AppCompatActivity() {
 
         applyVideoSettingsToIni(internalUserRoot(), loadVideoSettings())
 
+        applyViewMode(viewMode)
         refreshUi()
     }
 
@@ -219,6 +239,66 @@ class MainActivity : AppCompatActivity() {
 
     private fun internalUserRoot(): File {
         return File(getExternalFilesDir(null), "super3")
+    }
+
+    private fun flyersDir(internalRoot: File = internalUserRoot()): File {
+        return File(internalRoot, "Flyers")
+    }
+
+    private fun flyerSpanCount(): Int {
+        val dm = resources.displayMetrics
+        val portrait = dm.heightPixels >= dm.widthPixels
+        if (portrait) return 1
+        val widthDp = dm.widthPixels / dm.density
+        val desiredItemDp = 190f
+        return (widthDp / desiredItemDp).toInt().coerceIn(2, 6)
+    }
+
+    private fun applyViewMode(mode: GameListViewMode) {
+        gamesAdapter.setViewMode(mode)
+
+        val lm =
+            when (mode) {
+                GameListViewMode.LIST -> androidx.recyclerview.widget.LinearLayoutManager(this)
+                GameListViewMode.FLYERS -> GridLayoutManager(this, flyerSpanCount())
+            }
+
+        gamesList.layoutManager = lm
+        searchResultsList.layoutManager =
+            when (mode) {
+                GameListViewMode.LIST -> androidx.recyclerview.widget.LinearLayoutManager(this)
+                GameListViewMode.FLYERS -> GridLayoutManager(this, flyerSpanCount())
+            }
+
+        btnViewMode.setImageResource(
+            when (mode) {
+                GameListViewMode.LIST -> R.drawable.view_list_24px
+                GameListViewMode.FLYERS -> R.drawable.view_module_24px
+            },
+        )
+        btnViewMode.contentDescription =
+            when (mode) {
+                GameListViewMode.LIST -> "List view"
+                GameListViewMode.FLYERS -> "Flyer view"
+            }
+
+        gamesAdapter.submitList(buildItems(games, zipDocs, flyersDir()))
+    }
+
+    private fun loadViewMode(): GameListViewMode {
+        return when (prefs.getString("ui_view_mode", null)) {
+            "list" -> GameListViewMode.LIST
+            else -> GameListViewMode.FLYERS
+        }
+    }
+
+    private fun saveViewMode(mode: GameListViewMode) {
+        val v =
+            when (mode) {
+                GameListViewMode.LIST -> "list"
+                GameListViewMode.FLYERS -> "flyers"
+            }
+        prefs.edit().putString("ui_view_mode", v).apply()
     }
 
     private fun supermodelIniFile(internalRoot: File = internalUserRoot()): File {
@@ -286,7 +366,7 @@ class MainActivity : AppCompatActivity() {
             val tree = userTreeUri
             if (tree != null) {
                 thread(name = "Super3SyncSettings") {
-                    UserDataSync.syncInternalIntoTree(this, internalUserRoot(), tree)
+                    UserDataSync.syncInternalIntoTree(this, internalUserRoot(), tree, UserDataSync.DIRS_SETTINGS_ONLY)
                 }
             }
         }
@@ -491,7 +571,7 @@ class MainActivity : AppCompatActivity() {
         val gamesUri = gamesTreeUri
         if (gamesUri == null) {
             zipDocs = emptyMap()
-            gamesAdapter.submitList(buildItems(games, zipDocs))
+            gamesAdapter.submitList(buildItems(games, zipDocs, flyersDir()))
             statusText.text = "Games folder not set. Tap \"Games folder\" to choose."
             scanning = false
             return
@@ -502,8 +582,12 @@ class MainActivity : AppCompatActivity() {
         statusText.text = "Scanning…"
 
         thread(name = "Super3Scanner") {
+            val userUri = userTreeUri
+            if (userUri != null) {
+                UserDataSync.syncFromTreeIntoInternal(this, userUri, internalUserRoot(), listOf("Flyers"))
+            }
             val zips = scanZipDocs(gamesUri)
-            val items = buildItems(games, zips)
+            val items = buildItems(games, zips, flyersDir())
             runOnUiThread {
                 zipDocs = zips
                 gamesAdapter.submitList(items)
@@ -540,7 +624,7 @@ class MainActivity : AppCompatActivity() {
             val userUri = userTreeUri
 
             if (userUri != null) {
-                UserDataSync.syncFromTreeIntoInternal(this, userUri, internalRoot)
+                UserDataSync.syncFromTreeIntoInternal(this, userUri, internalRoot, UserDataSync.DIRS_GAME_SYNC)
             }
 
             applyVideoSettingsToIni(internalRoot, loadVideoSettings())
@@ -621,10 +705,66 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-private data class GameItem(val game: GameDef, val launchable: Boolean, val status: String)
+private data class GameItem(
+    val game: GameDef,
+    val launchable: Boolean,
+    val status: String,
+    val flyerFront: File?,
+    val flyerBack: File?,
+    val hasOwnFlyer: Boolean,
+) {
+    val hasFlyer: Boolean
+        get() = flyerFront != null
+}
 
-private fun buildItems(games: List<GameDef>, zipDocs: Map<String, DocumentFile>): List<GameItem> {
+private data class FlyerGroup(
+    val rootName: String,
+    val groupName: String,
+    val title: String,
+    val flyerFront: File?,
+    val flyerBack: File?,
+    val variants: List<GameItem>,
+)
+
+private fun flyerGroupRootAlias(name: String): String? {
+    return when {
+        name.equals("vs99.1", ignoreCase = true) -> "vs99"
+        name.equals("vs2v991", ignoreCase = true) -> "vs299"
+        else -> null
+    }
+}
+
+private fun shouldForceGroupWithRoot(name: String): Boolean {
+    return name.equals("vs99.1", ignoreCase = true) || name.equals("vs2v991", ignoreCase = true)
+}
+
+private fun flyerKeyCandidates(name: String): List<String> {
+    val alias = flyerGroupRootAlias(name) ?: return listOf(name)
+    return if (alias == name) listOf(name) else listOf(alias, name)
+}
+
+private fun buildItems(games: List<GameDef>, zipDocs: Map<String, DocumentFile>, flyersDir: File): List<GameItem> {
     val byName = games.associateBy { it.name }
+
+    val frontByKey = HashMap<String, File>(128)
+    val backByKey = HashMap<String, File>(128)
+    if (flyersDir.exists()) {
+        val files = flyersDir.listFiles().orEmpty()
+        for (f in files) {
+            if (!f.isFile) continue
+            val base = f.nameWithoutExtension
+            when {
+                base.endsWith("_front", ignoreCase = true) -> {
+                    val key = base.dropLast("_front".length)
+                    if (key.isNotBlank()) frontByKey[key] = f
+                }
+                base.endsWith("_back", ignoreCase = true) -> {
+                    val key = base.dropLast("_back".length)
+                    if (key.isNotBlank()) backByKey[key] = f
+                }
+            }
+        }
+    }
 
     fun requiredZips(g: GameDef): List<String> {
         val required = ArrayList<String>(4)
@@ -640,6 +780,32 @@ private fun buildItems(games: List<GameDef>, zipDocs: Map<String, DocumentFile>)
         return required
     }
 
+    fun normalizeFlyers(front: File?, back: File?): Pair<File?, File?> {
+        if (front == null && back == null) return null to null
+        val displayFront = front ?: back
+        val displayBack = if (front != null && back != null) back else null
+        return displayFront to displayBack
+    }
+
+    fun resolveFlyers(g: GameDef): Pair<File?, File?> {
+        val visited = HashSet<String>(8)
+        var cur: GameDef? = g
+        while (cur != null) {
+            if (!visited.add(cur.name)) break
+            for (key in flyerKeyCandidates(cur.name)) {
+                val front = frontByKey[key]
+                val back = backByKey[key]
+                if (front != null || back != null) {
+                    return normalizeFlyers(front, back)
+                }
+            }
+            val parent = cur.parent
+            if (parent.isNullOrBlank()) break
+            cur = byName[parent]
+        }
+        return null to null
+    }
+
     val items = games.map { g ->
         val req = requiredZips(g)
         val missing = req.filter { !zipDocs.containsKey(it) }
@@ -650,18 +816,46 @@ private fun buildItems(games: List<GameDef>, zipDocs: Map<String, DocumentFile>)
             } else {
                 "missing ${missing.joinToString(" + ") { "${it}.zip" }}"
             }
-        GameItem(game = g, launchable = launchable, status = status)
+        val directFront = frontByKey[g.name]
+        val directBack = backByKey[g.name]
+        val hasOwnFlyer = directFront != null || directBack != null
+        val flyers = resolveFlyers(g)
+        GameItem(
+            game = g,
+            launchable = launchable,
+            status = status,
+            flyerFront = flyers.first,
+            flyerBack = flyers.second,
+            hasOwnFlyer = hasOwnFlyer,
+        )
     }
 
-    return items.sortedWith(compareByDescending<GameItem> { it.launchable }.thenBy { it.game.displayName })
+    return items.sortedWith(
+        compareByDescending<GameItem> { it.hasFlyer }
+            .thenByDescending { it.launchable }
+            .thenBy { it.game.displayName },
+    )
 }
 
 private class GamesAdapter(
     private val onClick: (GameItem) -> Unit,
-) : RecyclerView.Adapter<GamesAdapter.VH>() {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    companion object {
+        private const val VT_LIST = 1
+        private const val VT_FLYERS = 2
+    }
+
+    private var viewMode: GameListViewMode = GameListViewMode.FLYERS
     private var allItems: List<GameItem> = emptyList()
     private var shownItems: List<GameItem> = emptyList()
+    private var shownFlyerGroups: List<FlyerGroup> = emptyList()
     private var filter: String = ""
+
+    fun setViewMode(mode: GameListViewMode) {
+        if (mode == viewMode) return
+        viewMode = mode
+        applyFilter()
+    }
 
     fun submitList(items: List<GameItem>) {
         allItems = items
@@ -677,31 +871,156 @@ private class GamesAdapter(
 
     private fun applyFilter() {
         val q = filter.trim()
-        shownItems =
-            if (q.isBlank()) {
-                allItems
-            } else {
-                val needle = q.lowercase()
-                allItems.filter {
-                    it.game.displayName.lowercase().contains(needle) || it.game.name.lowercase().contains(needle)
+        if (viewMode == GameListViewMode.FLYERS) {
+            val needle = q.takeIf { it.isNotBlank() }?.lowercase()
+            shownFlyerGroups = buildFlyerGroups(allItems, needle)
+        } else {
+            shownItems =
+                if (q.isBlank()) {
+                    allItems
+                } else {
+                    val needle = q.lowercase()
+                    allItems.filter {
+                        it.game.displayName.lowercase().contains(needle) || it.game.name.lowercase().contains(needle)
+                    }
                 }
-            }
+        }
         notifyDataSetChanged()
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_game, parent, false)
-        return VH(view)
+    override fun getItemViewType(position: Int): Int {
+        return when (viewMode) {
+            GameListViewMode.LIST -> VT_LIST
+            GameListViewMode.FLYERS -> VT_FLYERS
+        }
     }
 
-    override fun onBindViewHolder(holder: VH, position: Int) {
-        val item = shownItems[position]
-        holder.bind(item, onClick)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val inflater = LayoutInflater.from(parent.context)
+        return when (viewType) {
+            VT_LIST -> ListVH(inflater.inflate(R.layout.item_game_list, parent, false))
+            else -> FlyerGroupVH(inflater.inflate(R.layout.item_game, parent, false))
+        }
     }
 
-    override fun getItemCount(): Int = shownItems.size
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (holder) {
+            is ListVH -> holder.bind(shownItems[position], onClick)
+            is FlyerGroupVH -> holder.bind(shownFlyerGroups[position], onClick)
+        }
+    }
 
-    class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    override fun getItemCount(): Int {
+        return if (viewMode == GameListViewMode.FLYERS) {
+            shownFlyerGroups.size
+        } else {
+            shownItems.size
+        }
+    }
+
+    private fun buildFlyerGroups(items: List<GameItem>, needle: String?): List<FlyerGroup> {
+        if (items.isEmpty()) return emptyList()
+
+        val defByName = items.associate { it.game.name to it.game }
+        val rootCache = HashMap<String, String>(items.size)
+
+        fun rootNameFor(game: GameDef): String {
+            rootCache[game.name]?.let { return it }
+            val visited = HashSet<String>(8)
+            var cur: GameDef? = game
+            while (cur != null) {
+                if (!visited.add(cur.name)) break
+                val parent = cur.parent
+                if (parent.isNullOrBlank()) break
+                cur = defByName[parent]
+            }
+            val root = cur?.name ?: game.name
+            val normalized = flyerGroupRootAlias(root) ?: root
+            rootCache[game.name] = normalized
+            return normalized
+        }
+
+        fun matches(item: GameItem, needleLc: String): Boolean {
+            if (item.game.displayName.lowercase().contains(needleLc)) return true
+            if (item.game.name.lowercase().contains(needleLc)) return true
+            val ver = item.game.version
+            if (!ver.isNullOrBlank() && ver.lowercase().contains(needleLc)) return true
+            return false
+        }
+
+        val groups =
+            items.groupBy { item ->
+                val root = rootNameFor(item.game)
+                val splitByOwnFlyer =
+                    item.hasOwnFlyer &&
+                        item.game.name != root &&
+                        !shouldForceGroupWithRoot(item.game.name)
+                if (splitByOwnFlyer) item.game.name else root
+            }
+        val result = ArrayList<FlyerGroup>(groups.size)
+        for ((groupName, groupItems) in groups) {
+            val groupGame = defByName[groupName] ?: groupItems.firstOrNull()?.game
+            val rootName =
+                if (groupGame != null) {
+                    rootNameFor(groupGame)
+                } else {
+                    groupName
+                }
+
+            val title =
+                if (groupGame != null && groupName != rootName) {
+                    groupGame.displayName
+                } else {
+                    groupGame?.title ?: groupName
+                }
+
+            val ordered =
+                groupItems.sortedWith(
+                    compareByDescending<GameItem> { it.game.name == groupName }
+                        .thenBy { it.game.displayName },
+                )
+
+            val filteredVariants =
+                if (needle == null) {
+                    ordered
+                } else {
+                    val rootMatches =
+                        title.lowercase().contains(needle) ||
+                            rootName.lowercase().contains(needle)
+                    val matched = ordered.filter { matches(it, needle) }
+                    when {
+                        rootMatches -> ordered
+                        matched.isNotEmpty() -> matched
+                        else -> emptyList()
+                    }
+                }
+
+            if (filteredVariants.isEmpty()) continue
+
+            val main =
+                ordered.firstOrNull { it.game.name == groupName } ?: ordered.firstOrNull()
+            val flyerFront = main?.flyerFront
+            val flyerBack = main?.flyerBack
+
+            result.add(
+                FlyerGroup(
+                    rootName = rootName,
+                    groupName = groupName,
+                    title = title,
+                    flyerFront = flyerFront,
+                    flyerBack = flyerBack,
+                    variants = filteredVariants,
+                ),
+            )
+        }
+
+        return result.sortedWith(
+            compareByDescending<FlyerGroup> { it.flyerFront != null }
+                .thenBy { it.title },
+        )
+    }
+
+    class ListVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val title: TextView = itemView.findViewById(R.id.game_title)
         private val subtitle: TextView = itemView.findViewById(R.id.game_subtitle)
 
@@ -713,6 +1032,104 @@ private class GamesAdapter(
             subtitle.isEnabled = item.launchable
             itemView.alpha = if (item.launchable) 1.0f else 0.5f
             itemView.setOnClickListener { onClick(item) }
+        }
+    }
+
+    class FlyerGroupVH(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val flyerContainer: View = itemView.findViewById(R.id.flyer_container)
+        private val flyerFront: android.widget.ImageView = itemView.findViewById(R.id.flyer_front)
+        private val flyerBack: android.widget.ImageView = itemView.findViewById(R.id.flyer_back)
+        private val title: TextView = itemView.findViewById(R.id.game_title)
+        private val variantsContainer: ViewGroup = itemView.findViewById(R.id.variants_container)
+
+        private var showingBack = false
+
+        fun bind(group: FlyerGroup, onClick: (GameItem) -> Unit) {
+            title.text = group.title
+
+            val density = itemView.resources.displayMetrics.density
+            flyerFront.cameraDistance = 8000f * density
+            flyerBack.cameraDistance = 8000f * density
+
+            showingBack = false
+            flyerFront.rotationY = 0f
+            flyerBack.rotationY = 0f
+            flyerFront.visibility = View.VISIBLE
+            flyerBack.visibility = View.GONE
+
+            FlyerBitmapLoader.load(flyerFront, group.flyerFront, targetMaxPx = 1600)
+            FlyerBitmapLoader.load(flyerBack, group.flyerBack, targetMaxPx = 1600)
+
+            val canFlip = group.flyerFront != null && group.flyerBack != null
+            flyerContainer.isClickable = canFlip
+            flyerContainer.isFocusable = canFlip
+            flyerContainer.setOnClickListener {
+                if (!canFlip) return@setOnClickListener
+                flip()
+            }
+
+            variantsContainer.removeAllViews()
+            val inflater = LayoutInflater.from(itemView.context)
+
+            for (variant in group.variants) {
+                val row = inflater.inflate(R.layout.item_flyer_variant, variantsContainer, false)
+                val tvTitle: TextView = row.findViewById(R.id.variant_title)
+                val tvSubtitle: TextView = row.findViewById(R.id.variant_subtitle)
+                val btnPlay: ImageButton = row.findViewById(R.id.btn_play_variant)
+
+                val isPrimary = variant.game.name == group.groupName
+                val version = variant.game.version?.trim().orEmpty()
+                tvTitle.text =
+                    when {
+                        isPrimary && group.variants.size == 1 -> "Default"
+                        version.isNotBlank() -> version
+                        isPrimary -> "Default"
+                        else -> variant.game.name
+                    }
+                tvSubtitle.text = variant.status
+
+                row.isEnabled = variant.launchable
+                row.alpha = if (variant.launchable) 1.0f else 0.5f
+                btnPlay.isEnabled = variant.launchable
+
+                val click = View.OnClickListener { onClick(variant) }
+                row.setOnClickListener(click)
+                btnPlay.setOnClickListener(click)
+
+                variantsContainer.addView(row)
+            }
+        }
+
+        private fun flip() {
+            val front = flyerFront
+            val back = flyerBack
+
+            val first = if (showingBack) back else front
+            val second = if (showingBack) front else back
+            val toBack = !showingBack
+            showingBack = toBack
+
+            val duration = 140L
+            val flipOut = android.animation.ObjectAnimator.ofFloat(first, View.ROTATION_Y, 0f, 90f).apply {
+                this.duration = duration
+            }
+            val flipIn = android.animation.ObjectAnimator.ofFloat(second, View.ROTATION_Y, -90f, 0f).apply {
+                this.duration = duration
+            }
+
+            flipOut.addListener(
+                object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        first.visibility = View.GONE
+                        first.rotationY = 0f
+                        second.visibility = View.VISIBLE
+                        second.rotationY = -90f
+                        flipIn.start()
+                    }
+                },
+            )
+
+            flipOut.start()
         }
     }
 }

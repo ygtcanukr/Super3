@@ -28,5 +28,8 @@
 
   <color name="md_theme_outline">#6F7880</color>
   <color name="md_theme_outlineVariant">#C0C8CF</color>
-</resources>
 
+  <color name="play_green">#39FF14</color>
+
+  <color name="screenshot_backdrop">#22000000</color>
+</resources>

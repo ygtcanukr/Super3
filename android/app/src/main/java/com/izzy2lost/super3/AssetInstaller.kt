@@ -9,7 +9,7 @@ object AssetInstaller {
 
         // Copy the standard Supermodel folder layout from APK assets into the internal user root.
         // We never overwrite existing files so user edits persist.
-        val topLevel = listOf("Assets", "Config", "GraphicsAnalysis", "NVRAM", "Saves")
+        val topLevel = listOf("Assets", "Config", "GraphicsAnalysis", "NVRAM", "Saves", "Flyers")
         for (dir in topLevel) {
             copyAssetTree(context, dir, File(internalUserRoot, dir))
         }

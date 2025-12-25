@@ -351,7 +351,7 @@ class Super3Activity : SDLActivity() {
         val treeUri = Uri.parse(uriStr)
         val internalRoot = File(getExternalFilesDir(null), "super3")
         thread(name = "Super3UserSync") {
-            UserDataSync.syncInternalIntoTree(this, internalRoot, treeUri)
+            UserDataSync.syncInternalIntoTree(this, internalRoot, treeUri, UserDataSync.DIRS_GAME_SYNC)
         }
     }
 
@@ -523,7 +523,7 @@ class Super3Activity : SDLActivity() {
                         outFile.parentFile?.mkdirs()
                         val scaled = scaleDown(bitmap, targetWidth = 640)
                         FileOutputStream(outFile).use { fos ->
-                            scaled.compress(Bitmap.CompressFormat.PNG, 90, fos)
+                            scaled.compress(Bitmap.CompressFormat.PNG, 100, fos)
                         }
                         if (scaled !== bitmap) scaled.recycle()
                     }

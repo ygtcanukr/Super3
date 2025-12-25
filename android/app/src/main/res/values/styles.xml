@@ -5,4 +5,31 @@
     <item name="elevation">@dimen/m3_comp_button_elevated_container_elevation</item>
     <item name="materialThemeOverlay">@style/ThemeOverlay.Material3Expressive.Button.Elevated</item>
   </style>
+
+  <style name="ShapeAppearance.Super3.SmallComponent" parent="ShapeAppearance.Material3.SmallComponent">
+    <item name="cornerFamily">rounded</item>
+    <item name="cornerSize">14dp</item>
+  </style>
+
+  <style name="ShapeAppearance.Super3.MediumComponent" parent="ShapeAppearance.Material3.MediumComponent">
+    <item name="cornerFamily">rounded</item>
+    <item name="cornerSize">18dp</item>
+  </style>
+
+  <style name="ShapeAppearance.Super3.LargeComponent" parent="ShapeAppearance.Material3.LargeComponent">
+    <item name="cornerFamily">rounded</item>
+    <item name="cornerSize">24dp</item>
+  </style>
+
+  <style name="ShapeAppearanceOverlay_Super3">
+    <item name="cornerFamily">rounded</item>
+  </style>
+
+  <style name="ShapeAppearanceOverlay_Super3_Rounded18" parent="ShapeAppearanceOverlay_Super3">
+    <item name="cornerSize">18dp</item>
+  </style>
+
+  <style name="ShapeAppearanceOverlay_Super3_Rounded12" parent="ShapeAppearanceOverlay_Super3">
+    <item name="cornerSize">12dp</item>
+  </style>
 </resources>

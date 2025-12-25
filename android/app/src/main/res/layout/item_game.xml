@@ -9,31 +9,66 @@
   app:cardCornerRadius="12dp"
   app:cardBackgroundColor="?attr/colorSurface">
 
-  <LinearLayout
+  <androidx.constraintlayout.widget.ConstraintLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="12dp">
+
+    <FrameLayout
+      android:id="@+id/flyer_container"
+      android:layout_width="0dp"
+      android:layout_height="0dp"
+      android:foreground="@drawable/ripple_rounded_18"
+      android:clickable="false"
+      android:focusable="false"
+      app:layout_constraintTop_toTopOf="parent"
+      app:layout_constraintStart_toStartOf="parent"
+      app:layout_constraintEnd_toEndOf="parent"
+      app:layout_constraintDimensionRatio="17:24">
+
+      <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/flyer_front"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:contentDescription="Flyer front"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay_Super3_Rounded18" />
+
+      <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/flyer_back"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:contentDescription="Flyer back"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay_Super3_Rounded18"
+        android:visibility="gone" />
+
+    </FrameLayout>
 
     <com.google.android.material.textview.MaterialTextView
       android:id="@+id/game_title"
-      android:layout_width="match_parent"
+      android:layout_width="0dp"
       android:layout_height="wrap_content"
-      android:ellipsize="end"
-      android:maxLines="1"
-      android:textAppearance="?attr/textAppearanceHeadlineSmall"
-      android:textColor="?attr/colorOnSurface" />
-
-    <com.google.android.material.textview.MaterialTextView
-      android:id="@+id/game_subtitle"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_marginTop="8dp"
+      android:layout_marginTop="10dp"
       android:ellipsize="end"
       android:maxLines="2"
-      android:textAppearance="?attr/textAppearanceBodyMedium"
-      android:textColor="?attr/colorOnSurfaceVariant" />
+      android:textAppearance="?attr/textAppearanceTitleMedium"
+      android:textColor="?attr/colorOnSurface"
+      app:layout_constraintTop_toBottomOf="@id/flyer_container"
+      app:layout_constraintStart_toStartOf="parent"
+      app:layout_constraintEnd_toEndOf="parent" />
 
-  </LinearLayout>
+    <LinearLayout
+      android:id="@+id/variants_container"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="6dp"
+      android:orientation="vertical"
+      app:layout_constraintTop_toBottomOf="@id/game_title"
+      app:layout_constraintStart_toStartOf="parent"
+      app:layout_constraintEnd_toEndOf="parent"
+      app:layout_constraintBottom_toBottomOf="parent" />
+
+  </androidx.constraintlayout.widget.ConstraintLayout>
 
 </com.google.android.material.card.MaterialCardView>

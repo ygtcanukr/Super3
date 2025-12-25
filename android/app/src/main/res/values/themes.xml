@@ -27,5 +27,9 @@
 
     <item name="materialButtonStyle">@style/Widget.Material3Expressive.Button</item>
     <item name="materialButtonElevatedStyle">@style/Widget.Super3.Button.ElevatedButton</item>
+
+    <item name="shapeAppearanceSmallComponent">@style/ShapeAppearance.Super3.SmallComponent</item>
+    <item name="shapeAppearanceMediumComponent">@style/ShapeAppearance.Super3.MediumComponent</item>
+    <item name="shapeAppearanceLargeComponent">@style/ShapeAppearance.Super3.LargeComponent</item>
   </style>
 </resources>

@@ -7,20 +7,31 @@ import androidx.documentfile.provider.DocumentFile
 import java.io.File
 
 object UserDataSync {
-    private val syncDirs = listOf("NVRAM", "Saves", "Config")
+    val DIRS_GAME_SYNC = listOf("NVRAM", "Saves", "Config", "Flyers")
+    val DIRS_SETTINGS_ONLY = listOf("Config")
 
-    fun syncFromTreeIntoInternal(context: Context, treeUri: Uri, internalUserRoot: File) {
+    fun syncFromTreeIntoInternal(
+        context: Context,
+        treeUri: Uri,
+        internalUserRoot: File,
+        dirs: List<String> = DIRS_GAME_SYNC,
+    ) {
         val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return
-        for (dirName in syncDirs) {
+        for (dirName in dirs) {
             val from = tree.findFile(dirName) ?: continue
             val to = File(internalUserRoot, dirName)
             copyDocDirToFileDir(context.contentResolver, from, to)
         }
     }
 
-    fun syncInternalIntoTree(context: Context, internalUserRoot: File, treeUri: Uri) {
+    fun syncInternalIntoTree(
+        context: Context,
+        internalUserRoot: File,
+        treeUri: Uri,
+        dirs: List<String> = DIRS_GAME_SYNC,
+    ) {
         val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return
-        for (dirName in syncDirs) {
+        for (dirName in dirs) {
             val from = File(internalUserRoot, dirName)
             if (!from.exists() || !from.isDirectory) continue
             val to = ensureDocDir(tree, dirName)
@@ -79,4 +90,3 @@ object UserDataSync {
         }
     }
 }
-
