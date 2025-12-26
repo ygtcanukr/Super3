@@ -3,6 +3,8 @@ package com.izzy2lost.super3
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -40,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var searchBar: SearchBar
     private lateinit var searchView: SearchView
     private lateinit var btnViewMode: ImageButton
+    private lateinit var btnAbout: MaterialButton
 
     private lateinit var gamesFolderText: TextView
     private lateinit var userFolderText: TextView
@@ -130,6 +133,7 @@ class MainActivity : AppCompatActivity() {
 
         // Get views from the navigation header
         val headerView = navigationView.getHeaderView(0)
+        btnAbout = headerView.findViewById(R.id.btn_about)
         gamesFolderText = headerView.findViewById(R.id.games_folder_text)
         userFolderText = headerView.findViewById(R.id.user_folder_text)
         statusText = headerView.findViewById(R.id.status_text)
@@ -157,6 +161,11 @@ class MainActivity : AppCompatActivity() {
 
         toolbar.setNavigationOnClickListener {
             drawerLayout.openDrawer(GravityCompat.START)
+        }
+
+        btnAbout.setOnClickListener {
+            drawerLayout.closeDrawer(GravityCompat.START)
+            showAboutDialog()
         }
 
         btnPickGamesFolder.setOnClickListener { pickGamesFolder.launch(null) }
@@ -231,6 +240,38 @@ class MainActivity : AppCompatActivity() {
 
         applyViewMode(viewMode)
         refreshUi()
+    }
+
+    private fun showAboutDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_about, null)
+        val aboutText: TextView = view.findViewById(R.id.about_text)
+        aboutText.text =
+            """
+            SUPER3 is an open-source Sega Model 3 emulator for Android.
+
+            Sources used:
+            https://github.com/trzy/Supermodel
+            https://github.com/DirtBagXon/model3emu-code-sinden/tree/arm
+
+            License (GPLv3):
+            https://www.gnu.org/licenses/gpl-3.0.en.html
+
+            App source code:
+            https://github.com/izzy2lost/Super3
+
+            Disclaimers:
+            - No games/ROMs/BIOS included.
+            - Not affiliated with or endorsed by SEGA.
+            """.trimIndent()
+
+        Linkify.addLinks(aboutText, Linkify.WEB_URLS)
+        aboutText.movementMethod = LinkMovementMethod.getInstance()
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.about_title)
+            .setView(view)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     override fun onResume() {

@@ -1,5 +1,7 @@
 <resources>
   <string name="app_name">SUPER3</string>
+  <string name="about">About</string>
+  <string name="about_title">About SUPER3</string>
   <string name="game_menu_save_state">Save state</string>
   <string name="game_menu_exit_game">Exit game</string>
   <string name="save_state_dialog_title">Save states</string>

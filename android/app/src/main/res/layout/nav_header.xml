@@ -157,5 +157,13 @@
       android:textColor="?attr/colorOnPrimary"
       android:visibility="gone" />
 
+    <com.google.android.material.button.MaterialButton
+      android:id="@+id/btn_about"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="24dp"
+      android:text="@string/about"
+      style="?attr/materialButtonElevatedStyle" />
+
   </LinearLayout>
 </ScrollView>
