@@ -259,6 +259,9 @@ class MainActivity : AppCompatActivity() {
             App source code:
             https://github.com/izzy2lost/Super3
 
+            Privacy policy:
+            https://www.izzy2lost.com/super3-privacy
+
             Disclaimers:
             - No games/ROMs/BIOS included.
             - Not affiliated with or endorsed by SEGA.
