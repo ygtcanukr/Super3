@@ -10,8 +10,13 @@
 #include "R3DFloat.h"
 #include "Util/BitCast.h"
 
+#ifdef __ANDROID__
+#define MAX_RAM_VERTS 150000
+#define MAX_ROM_VERTS 500000
+#else
 #define MAX_RAM_VERTS 300000
 #define MAX_ROM_VERTS 1500000
+#endif
 
 #define BYTE_TO_FLOAT(B)	((2.0f * (B) + 1.0f) * (float)(1.0/255.0))
 

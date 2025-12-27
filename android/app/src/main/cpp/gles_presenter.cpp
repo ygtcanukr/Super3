@@ -140,7 +140,7 @@ void GlesPresenter::UpdateFrameARGB(const uint32_t* pixelsARGB, int width, int h
     m_srcW = width;
     m_srcH = height;
     glBindTexture(GL_TEXTURE_2D, m_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_srcW, m_srcH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_srcW, m_srcH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glBindTexture(GL_TEXTURE_2D, 0);
     UpdateQuadVerts();
   }

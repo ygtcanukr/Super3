@@ -271,7 +271,7 @@ void Texture::UploadTextureMip(int level, const UINT16* src, UINT8* scratch, int
 		break;
 	}
 
-	glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexImage2D(GL_TEXTURE_2D, level, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 	glTexSubImage2D(GL_TEXTURE_2D, level, 0, 0, subWidth, subHeight, GL_RGBA, GL_UNSIGNED_BYTE, scratch);
 }
 

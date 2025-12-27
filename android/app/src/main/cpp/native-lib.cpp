@@ -639,31 +639,62 @@ extern "C" int SDL_main(int argc, char* argv[]) {
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
-  SDL_Window* window = SDL_CreateWindow(
-    "Super3 (SDL bootstrap)",
-    SDL_WINDOWPOS_CENTERED,
-    SDL_WINDOWPOS_CENTERED,
-    1280,
-    720,
-    SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL
-  );
+  struct GlConfig {
+    int depth;
+    int stencil;
+  };
+  const GlConfig configs[] = {
+    {24, 8},
+    {24, 0},
+    {16, 8},
+    {16, 0},
+  };
 
-  if (!window) {
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateWindow failed: %s", SDL_GetError());
-    SDL_Quit();
-    return 1;
+  SDL_Window* window = nullptr;
+  SDL_GLContext gl = nullptr;
+  for (const auto& cfg : configs) {
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, cfg.depth);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, cfg.stencil);
+
+    window = SDL_CreateWindow(
+      "Super3 (SDL bootstrap)",
+      SDL_WINDOWPOS_CENTERED,
+      SDL_WINDOWPOS_CENTERED,
+      1280,
+      720,
+      SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL
+    );
+
+    if (!window) {
+      SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_CreateWindow failed: %s", SDL_GetError());
+      SDL_Quit();
+      return 1;
+    }
+
+    gl = SDL_GL_CreateContext(window);
+    if (gl) {
+      SDL_Log("SDL GL context created (depth=%d, stencil=%d)", cfg.depth, cfg.stencil);
+      break;
+    }
+
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext failed (depth=%d stencil=%d): %s",
+                 cfg.depth, cfg.stencil, SDL_GetError());
+    SDL_DestroyWindow(window);
+    window = nullptr;
   }
 
-  SDL_GLContext gl = SDL_GL_CreateContext(window);
   if (!gl) {
-    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_GL_CreateContext failed: %s", SDL_GetError());
-    SDL_DestroyWindow(window);
     SDL_Quit();
     return 1;
   }
 
   SDL_GL_MakeCurrent(window, gl);
   SDL_GL_SetSwapInterval(1);
+
+  SDL_Log("GL_VENDOR=%s", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
+  SDL_Log("GL_RENDERER=%s", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+  SDL_Log("GL_VERSION=%s", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+  SDL_Log("GLSL_VERSION=%s", reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)));
 
   GlesPresenter presenter;
   if (!presenter.Init()) {

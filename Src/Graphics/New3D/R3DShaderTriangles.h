@@ -7,12 +7,13 @@ static const char *vertexShaderR3D = R"glsl(
 
 #version 300 es
 precision highp float;
+precision highp int;
 
 // uniforms
 uniform float modelScale;
 uniform mat4  modelMat;
 uniform mat4  projMat;
-uniform bool  translatorMap;
+uniform int   translatorMap;
 
 // attributes
 layout(location=0) in vec4  inVertex;
@@ -30,7 +31,7 @@ out vec3 vDummy; // keeps attributes alive
 void main()
 {
   vec4 c = inColour;
-  if (translatorMap) c.rgb *= 16.0;
+  if (translatorMap != 0) c.rgb *= 16.0;
   vColor = c;
   vTexCoord = inTexCoord;
   vAlpha = c.a;
@@ -43,6 +44,7 @@ static const char *fragmentShaderR3D = R"glsl(
 
 #version 300 es
 precision mediump float;
+precision mediump int;
 
 in vec2 vTexCoord;
 in vec4 vColor;
@@ -50,10 +52,10 @@ in float vAlpha;
 in vec3 vDummy;
 
 uniform sampler2D tex1;
-uniform bool textureEnabled;
-uniform bool textureAlpha;
-uniform bool alphaTest;
-uniform bool discardAlpha;
+uniform int textureEnabled;
+uniform int textureAlpha;
+uniform int alphaTest;
+uniform int discardAlpha;
 
 out vec4 oColor;
 
@@ -61,9 +63,9 @@ void main()
 {
   vec4 col = vColor;
 
-  if (textureEnabled) {
+  if (textureEnabled != 0) {
     vec4 t = texture(tex1, vTexCoord);
-    if (textureAlpha) {
+    if (textureAlpha != 0) {
       col *= t;
     } else {
       col.rgb *= t.rgb;
@@ -73,8 +75,8 @@ void main()
   // keep vDummy "used"
   col.rgb += vDummy * 0.0;
 
-  if (alphaTest && col.a < 0.5) discard;
-  if (discardAlpha && col.a < 0.99) discard;
+  if (alphaTest != 0 && col.a < 0.5) discard;
+  if (discardAlpha != 0 && col.a < 0.99) discard;
 
   oColor = col;
 }
