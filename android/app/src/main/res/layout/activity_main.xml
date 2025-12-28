@@ -13,8 +13,10 @@
       android:id="@+id/app_bar"
       android:layout_width="match_parent"
       android:layout_height="wrap_content"
-      android:fitsSystemWindows="true"
+      android:fitsSystemWindows="false"
       android:background="?attr/colorPrimary"
+      android:paddingTop="0dp"
+      android:paddingBottom="0dp"
       app:materialThemeOverlay="@style/ThemeOverlay.Material3Expressive.AppBarWithSearch"
       app:elevation="8dp"
       app:liftOnScroll="false">
@@ -24,35 +26,92 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@android:color/transparent"
-        app:navigationIcon="@drawable/ic_menu_24"
-        app:navigationIconTint="?attr/colorOnPrimary">
+        android:minHeight="0dp"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        app:contentInsetEnd="0dp"
+        app:contentInsetStart="0dp"
+        app:contentInsetStartWithNavigation="0dp">
 
         <LinearLayout
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          android:orientation="horizontal"
-          android:gravity="center_vertical"
           android:layout_marginStart="8dp"
-          android:layout_marginEnd="8dp">
+          android:layout_marginEnd="8dp"
+          android:orientation="vertical">
 
-          <com.google.android.material.search.SearchBar
-            android:id="@+id/search_bar"
-            android:layout_width="0dp"
+          <FrameLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="Search games"
-            app:liftOnScroll="true"
-            app:liftOnScrollColor="?attr/colorSurfaceContainerHighest" />
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="0dp">
 
-          <ImageButton
-            android:id="@+id/btn_view_mode"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Change view"
-            android:src="@drawable/view_list_24px"
-            android:tint="?attr/colorOnPrimary" />
+            <ImageView
+              android:id="@+id/app_logo"
+              android:layout_width="200dp"
+              android:layout_height="200dp"
+              android:layout_gravity="center"
+              android:contentDescription="@string/app_name"
+              android:src="@drawable/logo" />
+
+            <ImageButton
+              android:id="@+id/btn_theme_toggle"
+              android:layout_width="40dp"
+              android:layout_height="40dp"
+              android:layout_gravity="end|center_vertical"
+              android:background="?attr/selectableItemBackgroundBorderless"
+              android:contentDescription="@string/theme_toggle"
+              android:src="@drawable/dark_mode_24px"
+              android:tint="?attr/colorOnPrimary" />
+          </FrameLayout>
+
+          <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="-50dp">
+
+            <ImageButton
+              android:id="@+id/btn_open_drawer"
+              android:layout_width="48dp"
+              android:layout_height="48dp"
+              android:background="?attr/selectableItemBackgroundBorderless"
+              android:contentDescription="@string/open_menu"
+              android:src="@drawable/ic_menu_24"
+              android:tint="?attr/colorOnPrimary"
+              app:layout_constraintBottom_toBottomOf="parent"
+              app:layout_constraintStart_toStartOf="parent"
+              app:layout_constraintTop_toTopOf="parent" />
+
+            <com.google.android.material.search.SearchBar
+              android:id="@+id/search_bar"
+              android:layout_width="0dp"
+              android:layout_height="38dp"
+              android:minHeight="38dp"
+              android:layout_marginStart="8dp"
+              android:layout_marginEnd="8dp"
+              android:hint="Search games"
+              app:liftOnScroll="true"
+              app:liftOnScrollColor="?attr/colorSurfaceContainerHighest"
+              app:layout_constraintBottom_toBottomOf="parent"
+              app:layout_constraintEnd_toEndOf="parent"
+              app:layout_constraintStart_toStartOf="parent"
+              app:layout_constraintTop_toTopOf="parent"
+              app:layout_constraintWidth_percent="0.72" />
+
+            <ImageButton
+              android:id="@+id/btn_view_mode"
+              android:layout_width="48dp"
+              android:layout_height="48dp"
+              android:background="?attr/selectableItemBackgroundBorderless"
+              android:contentDescription="Change view"
+              android:src="@drawable/view_list_24px"
+              android:tint="?attr/colorOnPrimary"
+              app:layout_constraintBottom_toBottomOf="parent"
+              app:layout_constraintEnd_toEndOf="parent"
+              app:layout_constraintTop_toTopOf="parent" />
+          </androidx.constraintlayout.widget.ConstraintLayout>
 
         </LinearLayout>
 

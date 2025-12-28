@@ -3,8 +3,10 @@ package com.izzy2lost.super3
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.content.res.Configuration
 import android.text.method.LinkMovementMethod
 import android.text.util.Linkify
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +15,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.GravityCompat
 import androidx.core.widget.addTextChangedListener
 import androidx.documentfile.provider.DocumentFile
@@ -27,6 +31,7 @@ import com.google.android.material.navigation.NavigationView
 import com.google.android.material.search.SearchBar
 import com.google.android.material.search.SearchView
 import java.io.File
+import java.util.ArrayDeque
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.concurrent.thread
@@ -41,7 +46,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: MaterialToolbar
     private lateinit var searchBar: SearchBar
     private lateinit var searchView: SearchView
+    private lateinit var btnOpenDrawer: ImageButton
     private lateinit var btnViewMode: ImageButton
+    private lateinit var btnThemeToggle: ImageButton
     private lateinit var btnAbout: MaterialButton
 
     private lateinit var gamesFolderText: TextView
@@ -119,6 +126,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyThemeFromPrefs()
         if (!prefs.getBoolean("setup_complete", false)) {
             val hasGames = prefs.getString("gamesTreeUri", null) != null
             val hasData = prefs.getString("userTreeUri", null) != null
@@ -138,7 +146,9 @@ class MainActivity : AppCompatActivity() {
         toolbar = findViewById(R.id.toolbar)
         searchBar = findViewById(R.id.search_bar)
         searchView = findViewById(R.id.search_view)
+        btnOpenDrawer = findViewById(R.id.btn_open_drawer)
         btnViewMode = findViewById(R.id.btn_view_mode)
+        btnThemeToggle = findViewById(R.id.btn_theme_toggle)
         gamesList = findViewById(R.id.games_list)
         searchResultsList = findViewById(R.id.search_results_list)
 
@@ -170,7 +180,7 @@ class MainActivity : AppCompatActivity() {
         gamesList.adapter = gamesAdapter
         searchResultsList.adapter = gamesAdapter
 
-        toolbar.setNavigationOnClickListener {
+        btnOpenDrawer.setOnClickListener {
             drawerLayout.openDrawer(GravityCompat.START)
         }
 
@@ -208,6 +218,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         runCatching { searchView.setupWithSearchBar(searchBar) }
+        styleSearchBarText()
         searchBar.setOnClickListener {
             searchView.show()
             searchView.requestFocusAndShowKeyboard()
@@ -242,6 +253,9 @@ class MainActivity : AppCompatActivity() {
             applyViewMode(viewMode)
         }
 
+        updateThemeToggleIcon()
+        btnThemeToggle.setOnClickListener { toggleTheme() }
+
         loadPrefs()
         games = GameXml.parseGamesXmlFromAssets(this)
 
@@ -251,6 +265,77 @@ class MainActivity : AppCompatActivity() {
 
         applyViewMode(viewMode)
         refreshUi()
+    }
+
+    private fun applyThemeFromPrefs() {
+        val mode =
+            when (prefs.getString("theme_mode", null)) {
+                "light" -> AppCompatDelegate.MODE_NIGHT_NO
+                "dark" -> AppCompatDelegate.MODE_NIGHT_YES
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+        if (AppCompatDelegate.getDefaultNightMode() != mode) {
+            AppCompatDelegate.setDefaultNightMode(mode)
+        }
+    }
+
+    private fun toggleTheme() {
+        val currentlyDark = isNightModeActive()
+        val mode =
+            if (currentlyDark) {
+                prefs.edit().putString("theme_mode", "light").apply()
+                AppCompatDelegate.MODE_NIGHT_NO
+            } else {
+                prefs.edit().putString("theme_mode", "dark").apply()
+                AppCompatDelegate.MODE_NIGHT_YES
+            }
+        AppCompatDelegate.setDefaultNightMode(mode)
+        recreate()
+    }
+
+    private fun isNightModeActive(): Boolean {
+        val mask = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        return mask == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    private fun updateThemeToggleIcon() {
+        if (isNightModeActive()) {
+            btnThemeToggle.setImageResource(R.drawable.light_mode_24px)
+            btnThemeToggle.contentDescription = getString(R.string.theme_switch_to_light)
+        } else {
+            btnThemeToggle.setImageResource(R.drawable.dark_mode_24px)
+            btnThemeToggle.contentDescription = getString(R.string.theme_switch_to_dark)
+        }
+    }
+
+    private fun styleSearchBarText() {
+        val textView = findSearchBarTextView() ?: return
+        textView.gravity = Gravity.CENTER
+        textView.textAlignment = View.TEXT_ALIGNMENT_CENTER
+        val icon = AppCompatResources.getDrawable(this, R.drawable.search_24px) ?: return
+        val tint =
+            MaterialColors.getColor(
+                searchBar,
+                com.google.android.material.R.attr.colorOnSurfaceVariant,
+            )
+        icon.setTint(tint)
+        textView.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null)
+        textView.compoundDrawablePadding = (6 * resources.displayMetrics.density).toInt()
+    }
+
+    private fun findSearchBarTextView(): TextView? {
+        val queue = ArrayDeque<View>()
+        queue.add(searchBar)
+        while (queue.isNotEmpty()) {
+            val view = queue.removeFirst()
+            if (view is TextView) return view
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    queue.add(view.getChildAt(i))
+                }
+            }
+        }
+        return null
     }
 
     private fun showAboutDialog() {
