@@ -175,6 +175,19 @@ void AndroidInputSystem::ApplyConfig(const Util::Config::Node& config)
   m_touchSpikeBeat.a = keySc(get("InputBeat", "KEY_S"), SDL_SCANCODE_S);
   m_touchSpikeCharge.a = keySc(get("InputCharge", "KEY_D"), SDL_SCANCODE_D);
   m_touchSpikeJump.a = keySc(get("InputJump", "KEY_F"), SDL_SCANCODE_F);
+
+  m_touchFishingCast.a = keySc(get("InputFishingCast", "KEY_Z"), SDL_SCANCODE_Z);
+  m_touchFishingSelect.a = keySc(get("InputFishingSelect", "KEY_X"), SDL_SCANCODE_X);
+  m_touchFishingReel.a = keySc(get("InputFishingReel", "KEY_SPACE"), SDL_SCANCODE_SPACE);
+  m_touchFishingTension.a = keySc(get("InputFishingTension", "KEY_T"), SDL_SCANCODE_T);
+
+  m_touchMagPedal1.a = keySc(get("InputMagicalPedal1", "KEY_A"), SDL_SCANCODE_A);
+  m_touchMagPedal2.a = keySc(get("InputMagicalPedal2", "KEY_S"), SDL_SCANCODE_S);
+
+  m_touchSkiPollLeft.a = keySc(get("InputSkiPollLeft", "KEY_A"), SDL_SCANCODE_A);
+  m_touchSkiPollRight.a = keySc(get("InputSkiPollRight", "KEY_S"), SDL_SCANCODE_S);
+  m_touchSkiSelect1.a = keySc(get("InputSkiSelect1", "KEY_Q"), SDL_SCANCODE_Q);
+  m_touchSkiSelect2.a = keySc(get("InputSkiSelect2", "KEY_W"), SDL_SCANCODE_W);
 }
 
 bool AndroidInputSystem::InitializeSystem()
@@ -340,6 +353,16 @@ void AndroidInputSystem::HandleTouch(const SDL_TouchFingerEvent& tf, bool down)
     case 1116: SetKeys(m_touchSpikeBeat, down); return;
     case 1117: SetKeys(m_touchSpikeCharge, down); return;
     case 1118: SetKeys(m_touchSpikeJump, down); return;
+    case 1120: SetKeys(m_touchFishingCast, down); return;
+    case 1121: SetKeys(m_touchFishingSelect, down); return;
+    case 1122: SetKeys(m_touchFishingReel, down); return;
+    case 1123: SetKeys(m_touchFishingTension, down); return;
+    case 1130: SetKeys(m_touchMagPedal1, down); return;
+    case 1131: SetKeys(m_touchMagPedal2, down); return;
+    case 1140: SetKeys(m_touchSkiPollLeft, down); return;
+    case 1141: SetKeys(m_touchSkiPollRight, down); return;
+    case 1142: SetKeys(m_touchSkiSelect1, down); return;
+    case 1143: SetKeys(m_touchSkiSelect2, down); return;
     default: break;
   }
 

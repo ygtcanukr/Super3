@@ -140,6 +140,26 @@ class Super3Activity : SDLActivity() {
                 gamesXml.isNotBlank() &&
                 GameInputsIndex.hasAnyInputType(gamesXml, game, setOf("gun1", "gun2", "analog_gun1", "analog_gun2"))
 
+        val isSoccer =
+            game.isNotBlank() &&
+                gamesXml.isNotBlank() &&
+                GameInputsIndex.hasAnyInputType(gamesXml, game, setOf("soccer", "twin_joysticks"))
+
+        val isFishing =
+            game.isNotBlank() &&
+                gamesXml.isNotBlank() &&
+                GameInputsIndex.hasAnyInputType(gamesXml, game, setOf("fishing"))
+
+        val isSki =
+            game.isNotBlank() &&
+                gamesXml.isNotBlank() &&
+                GameInputsIndex.hasAnyInputType(gamesXml, game, setOf("ski"))
+
+        val isMagTruck =
+            game.isNotBlank() &&
+                gamesXml.isNotBlank() &&
+                GameInputsIndex.hasAnyInputType(gamesXml, game, setOf("magtruck"))
+
         val isFighting =
             game.isNotBlank() &&
                 gamesXml.isNotBlank() &&
@@ -150,12 +170,15 @@ class Super3Activity : SDLActivity() {
                 gamesXml.isNotBlank() &&
                 GameInputsIndex.hasAnyInputType(gamesXml, game, setOf("spikeout"))
 
+        val showFightButtons = isFighting || isSpikeout || isSoccer || isFishing || isSki
+        val showFightStick = showFightButtons || isMagTruck
+
         val shifterEnabled = getSharedPreferences("super3_prefs", MODE_PRIVATE)
             .getBoolean("overlay_shifter_enabled", false)
         val showShifter = shifterEnabled && (hasShift4 || hasShiftUpDown)
 
         overlay.findViewById<LinearLayout>(R.id.overlay_pedals)?.visibility =
-            if (isRacing) View.VISIBLE else View.GONE
+            if (isRacing || isMagTruck) View.VISIBLE else View.GONE
 
         overlay.findViewById<ImageButton>(R.id.overlay_wheel)?.visibility =
             if (isRacing) View.VISIBLE else View.GONE
@@ -167,10 +190,10 @@ class Super3Activity : SDLActivity() {
             if (isGunGame) View.VISIBLE else View.GONE
 
         overlay.findViewById<View>(R.id.overlay_fight_stick)?.visibility =
-            if (isFighting || isSpikeout) View.VISIBLE else View.GONE
+            if (showFightStick) View.VISIBLE else View.GONE
 
         overlay.findViewById<View>(R.id.overlay_fight_buttons)?.visibility =
-            if (isFighting || isSpikeout) View.VISIBLE else View.GONE
+            if (showFightButtons) View.VISIBLE else View.GONE
 
         fun nativeTouch(action: Int, fingerId: Int, x: Float, y: Float, p: Float = 1.0f) {
             SDLActivity.onNativeTouch(0, fingerId, action, x, y, p)
@@ -233,10 +256,14 @@ class Super3Activity : SDLActivity() {
             bindMomentary(R.id.overlay_reload, fingerId = 1109, x = 0.90f, y = 0.90f)
         }
 
-        if (isFighting || isSpikeout) {
+        if (showFightButtons) {
             val baseId =
                 if (isSpikeout) {
                     1115
+                } else if (isFishing) {
+                    1120
+                } else if (isSki) {
+                    1140
                 } else {
                     1110
                 }
@@ -245,7 +272,9 @@ class Super3Activity : SDLActivity() {
             bindHeld(R.id.overlay_fight_kick, fingerId = baseId + 1, x = 0.82f, y = 0.65f)
             bindHeld(R.id.overlay_fight_guard, fingerId = baseId + 2, x = 0.90f, y = 0.45f)
             bindHeld(R.id.overlay_fight_escape, fingerId = baseId + 3, x = 0.82f, y = 0.35f)
+        }
 
+        if (showFightStick) {
             val stick = overlay.findViewById<FrameLayout>(R.id.overlay_fight_stick)
             val knob = overlay.findViewById<View>(R.id.overlay_fight_stick_knob)
             stick?.setOnTouchListener { v, ev ->
@@ -294,47 +323,54 @@ class Super3Activity : SDLActivity() {
             overlay.findViewById<View>(R.id.overlay_fight_stick)?.setOnTouchListener(null)
         }
 
-        if (isRacing) {
+        if (isRacing || isMagTruck) {
+            val gasId = if (isMagTruck) 1130 else 1103
+            val brakeId = if (isMagTruck) 1131 else 1104
+
             // Match the native pedal zone (right-middle), independent of UI placement.
-            bindHeld(R.id.overlay_gas, fingerId = 1103, x = 0.85f, y = 0.35f)
-            bindHeld(R.id.overlay_brake, fingerId = 1104, x = 0.85f, y = 0.80f)
+            bindHeld(R.id.overlay_gas, fingerId = gasId, x = 0.85f, y = 0.35f)
+            bindHeld(R.id.overlay_brake, fingerId = brakeId, x = 0.85f, y = 0.80f)
 
             val wheel = overlay.findViewById<ImageButton>(R.id.overlay_wheel)
-            wheel?.setOnTouchListener { v, ev ->
-                val w = v.width.toFloat().coerceAtLeast(1f)
-                val cx = w / 2f
-                val dx = (ev.x - cx) / cx
-                val steer = dx.coerceIn(-1f, 1f)
+            if (isRacing) {
+                wheel?.setOnTouchListener { v, ev ->
+                    val w = v.width.toFloat().coerceAtLeast(1f)
+                    val cx = w / 2f
+                    val dx = (ev.x - cx) / cx
+                    val steer = dx.coerceIn(-1f, 1f)
 
-                v.rotation = steer * 75f
+                    v.rotation = steer * 75f
 
-                val encodedX = ((steer + 1f) / 2f).coerceIn(0f, 1f)
-                val encodedY = 0.5f
+                    val encodedX = ((steer + 1f) / 2f).coerceIn(0f, 1f)
+                    val encodedY = 0.5f
 
-                when (ev.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        v.alpha = 0.75f
-                        nativeTouch(MotionEvent.ACTION_DOWN, 1107, encodedX, encodedY)
-                        true
+                    when (ev.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            v.alpha = 0.75f
+                            nativeTouch(MotionEvent.ACTION_DOWN, 1107, encodedX, encodedY)
+                            true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            nativeTouch(MotionEvent.ACTION_MOVE, 1107, encodedX, encodedY)
+                            true
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            v.alpha = 1.0f
+                            v.rotation = 0f
+                            nativeTouch(MotionEvent.ACTION_UP, 1107, 0.5f, encodedY)
+                            true
+                        }
+                        MotionEvent.ACTION_CANCEL -> {
+                            v.alpha = 1.0f
+                            v.rotation = 0f
+                            nativeTouch(MotionEvent.ACTION_UP, 1107, 0.5f, encodedY)
+                            true
+                        }
+                        else -> true
                     }
-                    MotionEvent.ACTION_MOVE -> {
-                        nativeTouch(MotionEvent.ACTION_MOVE, 1107, encodedX, encodedY)
-                        true
-                    }
-                    MotionEvent.ACTION_UP -> {
-                        v.alpha = 1.0f
-                        v.rotation = 0f
-                        nativeTouch(MotionEvent.ACTION_UP, 1107, 0.5f, encodedY)
-                        true
-                    }
-                    MotionEvent.ACTION_CANCEL -> {
-                        v.alpha = 1.0f
-                        v.rotation = 0f
-                        nativeTouch(MotionEvent.ACTION_UP, 1107, 0.5f, encodedY)
-                        true
-                    }
-                    else -> true
                 }
+            } else {
+                wheel?.setOnTouchListener(null)
             }
 
             val shifter = overlay.findViewById<ImageButton>(R.id.overlay_shifter)

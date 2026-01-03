@@ -141,6 +141,19 @@ private:
   DualScancode m_touchSpikeCharge{SDL_SCANCODE_D, SDL_SCANCODE_UNKNOWN};
   DualScancode m_touchSpikeJump{SDL_SCANCODE_F, SDL_SCANCODE_UNKNOWN};
 
+  DualScancode m_touchFishingCast{SDL_SCANCODE_Z, SDL_SCANCODE_UNKNOWN};
+  DualScancode m_touchFishingSelect{SDL_SCANCODE_X, SDL_SCANCODE_UNKNOWN};
+  DualScancode m_touchFishingReel{SDL_SCANCODE_SPACE, SDL_SCANCODE_UNKNOWN};
+  DualScancode m_touchFishingTension{SDL_SCANCODE_T, SDL_SCANCODE_UNKNOWN};
+
+  DualScancode m_touchMagPedal1{SDL_SCANCODE_A, SDL_SCANCODE_UNKNOWN};
+  DualScancode m_touchMagPedal2{SDL_SCANCODE_S, SDL_SCANCODE_UNKNOWN};
+
+  DualScancode m_touchSkiPollLeft{SDL_SCANCODE_A, SDL_SCANCODE_UNKNOWN};
+  DualScancode m_touchSkiPollRight{SDL_SCANCODE_S, SDL_SCANCODE_UNKNOWN};
+  DualScancode m_touchSkiSelect1{SDL_SCANCODE_Q, SDL_SCANCODE_UNKNOWN};
+  DualScancode m_touchSkiSelect2{SDL_SCANCODE_W, SDL_SCANCODE_UNKNOWN};
+
   bool m_gunTouchEnabled = false;
   SDL_FingerID m_gunFinger = 0;
   bool m_gunFingerActive = false;

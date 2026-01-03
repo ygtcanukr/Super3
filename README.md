@@ -48,4 +48,3 @@ From the main game list, open the side menu (toolbar "menu" icon) and look under
 ## License
 
 This project is licensed under the [GNU GPL v3.0](LICENSE).
-If you distribute builds (including on Google Play), GPL requires providing the corresponding source code to recipients (see [Source & Third-Party](#source--third-party)).
