@@ -1,6 +1,7 @@
 #include "gles_presenter.h"
 
 #include <GLES3/gl3.h>
+#include <SDL.h>
 
 #include <algorithm>
 #include <cstring>
@@ -8,7 +9,31 @@
 namespace {
 static GLuint Compile(GLenum type, const char* src)
 {
+  if (!src) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GlesPresenter: null shader source");
+    return 0;
+  }
+
+  // Mali drivers can be strict about #version being the first token.
+  // Trim leading BOM/whitespace/newlines before passing to the compiler.
+  const unsigned char* u = reinterpret_cast<const unsigned char*>(src);
+  if (u[0] == 0xEF && u[1] == 0xBB && u[2] == 0xBF) {
+    src += 3;
+  }
+  while (*src) {
+    const unsigned char c = static_cast<unsigned char>(*src);
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      ++src;
+      continue;
+    }
+    break;
+  }
+
   GLuint sh = glCreateShader(type);
+  if (!sh) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GlesPresenter: glCreateShader(%u) failed (err=0x%x)", (unsigned)type, (unsigned)glGetError());
+    return 0;
+  }
   glShaderSource(sh, 1, &src, nullptr);
   glCompileShader(sh);
   GLint ok = 0;
@@ -18,6 +43,10 @@ static GLuint Compile(GLenum type, const char* src)
     char log[2048];
     GLsizei n = 0;
     glGetShaderInfoLog(sh, (GLsizei)sizeof(log), &n, log);
+    log[(n >= (GLsizei)sizeof(log)) ? ((GLsizei)sizeof(log) - 1) : n] = '\0';
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GlesPresenter: shader compile failed (%s):\n%s",
+                 (type == GL_VERTEX_SHADER) ? "VS" : (type == GL_FRAGMENT_SHADER) ? "FS" : "UNKNOWN",
+                 log);
     glDeleteShader(sh);
     return 0;
   }
@@ -56,10 +85,11 @@ void GlesPresenter::Shutdown()
 
 bool GlesPresenter::CreateProgram()
 {
-  static const char* vs = R"glsl(
-    #version 300 es
-    layout(location=0) in vec2 aPos;
-    layout(location=1) in vec2 aUv;
+  static const char* vs = R"glsl(#version 300 es
+    precision highp float;
+    precision highp int;
+    in vec2 aPos;
+    in vec2 aUv;
     out vec2 vUv;
     void main() {
       vUv = aUv;
@@ -67,12 +97,13 @@ bool GlesPresenter::CreateProgram()
     }
   )glsl";
 
-  static const char* fs = R"glsl(
-    #version 300 es
+  static const char* fs = R"glsl(#version 300 es
     precision mediump float;
+    precision mediump int;
+    precision lowp sampler2D;
     in vec2 vUv;
     uniform sampler2D uTex;
-    out vec4 oColor;
+    layout(location=0) out vec4 oColor;
     void main() {
       oColor = texture(uTex, vUv);
     }
@@ -90,6 +121,8 @@ bool GlesPresenter::CreateProgram()
   m_program = glCreateProgram();
   glAttachShader(m_program, v);
   glAttachShader(m_program, f);
+  glBindAttribLocation(m_program, 0, "aPos");
+  glBindAttribLocation(m_program, 1, "aUv");
   glLinkProgram(m_program);
   glDeleteShader(v);
   glDeleteShader(f);
@@ -98,6 +131,11 @@ bool GlesPresenter::CreateProgram()
   glGetProgramiv(m_program, GL_LINK_STATUS, &ok);
   if (!ok)
   {
+    char log[2048];
+    GLsizei n = 0;
+    glGetProgramInfoLog(m_program, (GLsizei)sizeof(log), &n, log);
+    log[(n >= (GLsizei)sizeof(log)) ? ((GLsizei)sizeof(log) - 1) : n] = '\0';
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "GlesPresenter: program link failed:\n%s", log);
     glDeleteProgram(m_program);
     m_program = 0;
     return false;
