@@ -10,6 +10,7 @@
 #include <atomic>
 #include <thread>
 #include <cstring>
+#include <cmath>
 
 #include <GLES3/gl3.h>
 
@@ -259,6 +260,13 @@ struct Super3Host {
     // Supermodel.ini commonly uses 200 as "100%".
     config.Set("SoundVolume", "100");
     config.Set("MusicVolume", "150");
+
+    // Match desktop defaults: cap emulation to the requested refresh rate.
+    // Without this, vsync on high-refresh devices (e.g., 120 Hz) can drive the
+    // emulation loop too fast.
+    config.Set("Throttle", true);
+    config.Set("RefreshRate", "60.0");
+
     config.Set("LegacySoundDSP", false);
     config.Set("New3DEngine", true);
     config.Set("New3DAccurate", false);
@@ -736,6 +744,45 @@ static std::optional<std::string> FindFirstExisting(const std::vector<std::strin
   return std::nullopt;
 }
 
+static uint64_t GetDesiredRefreshRateMilliHz(const Util::Config::Node& config)
+{
+  // Expressed as mHz (Hz * 1000) so 57.524 Hz can be represented as 57524 mHz.
+  float refreshRateHz = 60.0f;
+  try {
+    refreshRateHz = std::abs(config["RefreshRate"].ValueAsDefault<float>(60.0f));
+  } catch (...) {
+    refreshRateHz = 60.0f;
+  }
+
+  if (!std::isfinite(refreshRateHz) || refreshRateHz <= 0.0f) {
+    return 0;
+  }
+
+  return uint64_t(1000.0f * refreshRateHz);
+}
+
+static void SuperSleepUntil(uint64_t target, uint64_t perfCounterFrequency)
+{
+  const uint64_t time = SDL_GetPerformanceCounter();
+  if (time > target) {
+    return;
+  }
+
+  // Sleep the whole number of milliseconds minus one, then spin for the tail.
+  int32_t numWholeMillisToSleep = int32_t((target - time) * 1000 / perfCounterFrequency);
+  numWholeMillisToSleep -= 1;
+  if (numWholeMillisToSleep > 0) {
+    SDL_Delay((uint32_t)numWholeMillisToSleep);
+  }
+
+  volatile uint64_t now;
+  int32_t remain;
+  do {
+    now = SDL_GetPerformanceCounter();
+    remain = int32_t(target - now);
+  } while (remain > 0);
+}
+
 // SDL entry point; currently a stub until the emulator core is hooked up.
 extern "C" int SDL_main(int argc, char* argv[]) {
   (void)argc;
@@ -896,6 +943,10 @@ extern "C" int SDL_main(int argc, char* argv[]) {
   bool loggedControls = false;
   bool audioOpened = false;
   bool new3dAttached = false;
+
+  const uint64_t perfCounterFrequency = SDL_GetPerformanceFrequency();
+  uint64_t perfCountPerFrame = 0;
+  uint64_t nextTime = 0;
   while (running) {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
@@ -1026,6 +1077,20 @@ extern "C" int SDL_main(int argc, char* argv[]) {
     }
 
     SDL_GL_SwapWindow(window);
+
+    // Frame limiting: cap emulation on high refresh rate displays (e.g., 120 Hz).
+    // Mirrors the desktop SDL OSD behavior (Throttle + RefreshRate).
+    const bool throttle = host.config["Throttle"].ValueAsDefault<bool>(true);
+    if (throttle || host.threadsPausedByMenu) {
+      const uint64_t refreshRateMilliHz = GetDesiredRefreshRateMilliHz(host.config);
+      if (refreshRateMilliHz > 0 && perfCounterFrequency > 0) {
+        perfCountPerFrame = (perfCounterFrequency * 1000) / refreshRateMilliHz;
+        if (perfCountPerFrame == 0) perfCountPerFrame = 1;
+
+        SuperSleepUntil(nextTime, perfCounterFrequency);
+        nextTime = SDL_GetPerformanceCounter() + perfCountPerFrame;
+      }
+    }
 
     uint32_t t = SDL_GetTicks();
     if (t - lastStatusLog > 2000) {

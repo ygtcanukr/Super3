@@ -24,6 +24,15 @@ From the main game list, open the side menu (toolbar "menu" icon) and look under
 - **Wide background:** Stretches the 2D background layers when using widescreen (Supermodel `-wide-bg`).
 - **Enhanced Real3D (experimental):** Enables more desktop-like Real3D rendering (multi-pass transparency compositing + scroll fog). This can improve visuals in some games/areas, but may reduce performance on lower-end devices.
 
+## Frame rate (High refresh devices)
+
+If games run too fast on 90/120Hz devices, enable frame limiting in `.../Android/data/<package>/files/super3/Config/Supermodel.ini`:
+
+- `Throttle = 1`
+- `RefreshRate = 60.000` (or `57.524` for true Model 3 speed)
+
+Note: the app overwrites `Supermodel.ini` with the APK defaults after app updates.
+
 ## Files & Storage
 
 - Save states and thumbnails are stored under the app's user data directory in `Saves/` (for example: `.../Android/data/<package>/files/super3/Saves/`).
