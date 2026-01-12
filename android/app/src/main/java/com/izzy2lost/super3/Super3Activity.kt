@@ -13,6 +13,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.view.PixelCopy
 import android.view.KeyEvent
+import android.view.InputDevice
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.Surface
@@ -41,12 +42,17 @@ import org.libsdl.app.SDLActivity
  * library specified by SDL_MAIN_LIBRARY (set to "super3" in the manifest).
  */
 class Super3Activity : SDLActivity() {
+    private companion object {
+        private const val COMBO_WINDOW_MS = 120L
+    }
+
     private val prefs by lazy { getSharedPreferences("super3_prefs", MODE_PRIVATE) }
     private val mainHandler = Handler(Looper.getMainLooper())
     private var overlayView: View? = null
     private var overlayControlsEnabled: Boolean = true
     private var gyroSteeringEnabled: Boolean = false
     private var menuPaused = false
+    private var quickMenuOpen = false
     private var saveDialogOpen = false
     private var exitDialogOpen = false
     private var userPaused = false
@@ -54,6 +60,20 @@ class Super3Activity : SDLActivity() {
     private var capturingThumbnail = false
     private var gameName: String = ""
     private var userDataRoot: File? = null
+
+    private var comboStartDown = false
+    private var comboSelectDown = false
+    private var comboTriggered = false
+    private var comboStartDownTime = 0L
+    private var comboSelectDownTime = 0L
+    private var comboStartDispatched = false
+    private var comboSelectDispatched = false
+    private var pendingStartDownEvent: KeyEvent? = null
+    private var pendingSelectDownEvent: KeyEvent? = null
+    private var pendingStartUpEvent: KeyEvent? = null
+    private var pendingSelectUpEvent: KeyEvent? = null
+    private var startDispatchToken = 0
+    private var selectDispatchToken = 0
 
     private var gyroSensorManager: SensorManager? = null
     private var gyroSensor: Sensor? = null
@@ -115,12 +135,6 @@ class Super3Activity : SDLActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-
-        if (!overlayControlsEnabled) {
-            overlay.findViewById<View>(R.id.overlay_controls_root)?.visibility = View.GONE
-            overlay.visibility = View.GONE
-            return
-        }
 
         overlay.findViewById<View>(R.id.overlay_save_state)?.setOnClickListener {
             showSaveStateDialog()
@@ -393,6 +407,8 @@ class Super3Activity : SDLActivity() {
             overlay.findViewById<View>(R.id.overlay_fight_stick)?.setOnTouchListener(null)
         }
 
+        applyOverlayControlsEnabled(overlayControlsEnabled, persist = false)
+
         if (isRacing || isMagTruck) {
             val gasId = if (isMagTruck) 1130 else 1103
             val brakeId = if (isMagTruck) 1131 else 1104
@@ -627,11 +643,15 @@ class Super3Activity : SDLActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (quickMenuOpen || saveDialogOpen || exitDialogOpen) {
+                return super.dispatchKeyEvent(event)
+            }
             if (event.action == KeyEvent.ACTION_UP) {
                 handleBackPress()
             }
             return true
         }
+        if (handleStartSelectCombo(event)) return true
         return super.dispatchKeyEvent(event)
     }
 
@@ -701,10 +721,263 @@ class Super3Activity : SDLActivity() {
     }
 
     private fun updatePauseState() {
-        val shouldPause = userPaused || exitDialogOpen || saveDialogOpen || capturingThumbnail
+        val shouldPause = userPaused || exitDialogOpen || saveDialogOpen || quickMenuOpen || capturingThumbnail
         if (shouldPause == menuPaused) return
         menuPaused = shouldPause
         nativeSetMenuPaused(shouldPause)
+    }
+
+    private fun showQuickOptionsMenu() {
+        if (quickMenuOpen || exitDialogOpen || saveDialogOpen || capturingThumbnail) return
+        quickMenuOpen = true
+        updatePauseState()
+
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_quick_menu, null)
+        
+        val btnPauseResume = dialogView.findViewById<MaterialButton>(R.id.btn_pause_resume)
+        val btnSaveStates = dialogView.findViewById<MaterialButton>(R.id.btn_save_states)
+        val btnTouchControls = dialogView.findViewById<MaterialButton>(R.id.btn_touch_controls)
+        val btnGyroSteering = dialogView.findViewById<MaterialButton>(R.id.btn_gyro_steering)
+        val btnExitGame = dialogView.findViewById<MaterialButton>(R.id.btn_exit_game)
+
+        // Set initial text states
+        btnPauseResume.text = getString(if (userPaused) R.string.quick_menu_resume else R.string.quick_menu_pause)
+        btnTouchControls.text = getString(if (overlayControlsEnabled) R.string.quick_menu_hide_touch_controls else R.string.quick_menu_show_touch_controls)
+        btnGyroSteering.text = getString(if (gyroSteeringEnabled) R.string.quick_menu_disable_gyro else R.string.quick_menu_enable_gyro)
+
+        val dialog = MaterialAlertDialogBuilder(
+            this,
+            com.google.android.material.R.style.ThemeOverlay_Material3_MaterialAlertDialog,
+        )
+            .setTitle(R.string.quick_menu_title)
+            .setView(dialogView)
+            .setNegativeButton(android.R.string.cancel) { d, _ -> d.dismiss() }
+            .setOnDismissListener {
+                quickMenuOpen = false
+                updatePauseState()
+            }
+            .create()
+
+        btnPauseResume.setOnClickListener {
+            userPaused = !userPaused
+            updatePauseState()
+            dialog.dismiss()
+        }
+
+        btnSaveStates.setOnClickListener {
+            dialog.dismiss()
+            mainHandler.post { showSaveStateDialog() }
+        }
+
+        btnTouchControls.setOnClickListener {
+            applyOverlayControlsEnabled(!overlayControlsEnabled, persist = true)
+            dialog.dismiss()
+        }
+
+        btnGyroSteering.setOnClickListener {
+            applyGyroSteeringEnabled(!gyroSteeringEnabled, persist = true)
+            dialog.dismiss()
+        }
+
+        btnExitGame.setOnClickListener {
+            dialog.dismiss()
+            finish()
+        }
+
+        dialog.show()
+    }
+
+    private fun applyOverlayControlsEnabled(enabled: Boolean, persist: Boolean) {
+        overlayControlsEnabled = enabled
+        if (persist) {
+            prefs.edit().putBoolean("overlay_controls_enabled", enabled).apply()
+        }
+        val overlay = overlayView
+        overlay?.findViewById<View>(R.id.overlay_controls_root)?.visibility = if (enabled) View.VISIBLE else View.GONE
+        overlay?.visibility = if (enabled) View.VISIBLE else View.GONE
+    }
+
+    private fun applyGyroSteeringEnabled(enabled: Boolean, persist: Boolean) {
+        gyroSteeringEnabled = enabled
+        if (persist) {
+            prefs.edit().putBoolean("gyro_steering_enabled", enabled).apply()
+        }
+        if (enabled) {
+            startGyroSteering()
+        } else {
+            stopGyroSteering()
+        }
+    }
+
+    private fun handleStartSelectCombo(event: KeyEvent): Boolean {
+        if (!event.isFromSource(InputDevice.SOURCE_GAMEPAD) && !event.isFromSource(InputDevice.SOURCE_JOYSTICK)) {
+            return false
+        }
+        val isStart = event.keyCode == KeyEvent.KEYCODE_BUTTON_START
+        val isSelect = event.keyCode == KeyEvent.KEYCODE_BUTTON_SELECT
+        if (!isStart && !isSelect) return false
+
+        if (quickMenuOpen || saveDialogOpen || exitDialogOpen || capturingThumbnail) {
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    if (isStart) comboStartDown = true else comboSelectDown = true
+                }
+                KeyEvent.ACTION_UP -> {
+                    if (isStart) comboStartDown = false else comboSelectDown = false
+                    if (!comboStartDown && !comboSelectDown) comboTriggered = false
+                }
+            }
+            cancelPendingComboDispatches()
+            return true
+        }
+
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount > 0) {
+                    if (comboTriggered) return true
+                    if ((isStart && comboStartDispatched) || (isSelect && comboSelectDispatched)) {
+                        deliverToSdl(event)
+                    }
+                    return true
+                }
+
+                if (isStart) {
+                    comboStartDown = true
+                    comboStartDownTime = event.eventTime
+                    if (!comboStartDispatched && pendingStartDownEvent == null) {
+                        pendingStartDownEvent = KeyEvent(event)
+                        startDispatchToken += 1
+                        val token = startDispatchToken
+                        mainHandler.postDelayed({ flushPendingStart(token) }, COMBO_WINDOW_MS)
+                    }
+                } else {
+                    comboSelectDown = true
+                    comboSelectDownTime = event.eventTime
+                    if (!comboSelectDispatched && pendingSelectDownEvent == null) {
+                        pendingSelectDownEvent = KeyEvent(event)
+                        selectDispatchToken += 1
+                        val token = selectDispatchToken
+                        mainHandler.postDelayed({ flushPendingSelect(token) }, COMBO_WINDOW_MS)
+                    }
+                }
+
+                if (!comboTriggered && comboStartDown && comboSelectDown) {
+                    val delta = kotlin.math.abs(comboStartDownTime - comboSelectDownTime)
+                    if (delta <= COMBO_WINDOW_MS) {
+                        comboTriggered = true
+                        cancelPendingComboDispatches()
+                        showQuickOptionsMenu()
+                    }
+                }
+                return true
+            }
+            KeyEvent.ACTION_UP -> {
+                if (isStart) {
+                    comboStartDown = false
+                    comboStartDownTime = 0L
+                } else {
+                    comboSelectDown = false
+                    comboSelectDownTime = 0L
+                }
+
+                if (comboTriggered) {
+                    if (!comboStartDown && !comboSelectDown) {
+                        comboTriggered = false
+                    }
+                    return true
+                }
+
+                if (isStart) {
+                    val down = pendingStartDownEvent
+                    if (!comboStartDispatched && down != null) {
+                        pendingStartDownEvent = null
+                        deliverToSdl(down)
+                        deliverToSdl(KeyEvent(event))
+                        comboStartDispatched = false
+                        pendingStartUpEvent = null
+                        return true
+                    }
+                    if (comboStartDispatched) {
+                        deliverToSdl(event)
+                        comboStartDispatched = false
+                        return true
+                    }
+                    pendingStartUpEvent = KeyEvent(event)
+                    return true
+                } else {
+                    val down = pendingSelectDownEvent
+                    if (!comboSelectDispatched && down != null) {
+                        pendingSelectDownEvent = null
+                        deliverToSdl(down)
+                        deliverToSdl(KeyEvent(event))
+                        comboSelectDispatched = false
+                        pendingSelectUpEvent = null
+                        return true
+                    }
+                    if (comboSelectDispatched) {
+                        deliverToSdl(event)
+                        comboSelectDispatched = false
+                        return true
+                    }
+                    pendingSelectUpEvent = KeyEvent(event)
+                    return true
+                }
+            }
+            else -> return true
+        }
+    }
+
+    private fun cancelPendingComboDispatches() {
+        startDispatchToken += 1
+        selectDispatchToken += 1
+        pendingStartDownEvent = null
+        pendingSelectDownEvent = null
+        pendingStartUpEvent = null
+        pendingSelectUpEvent = null
+        comboStartDispatched = false
+        comboSelectDispatched = false
+    }
+
+    private fun flushPendingStart(token: Int) {
+        if (token != startDispatchToken) return
+        if (comboTriggered || quickMenuOpen || saveDialogOpen || exitDialogOpen || capturingThumbnail) {
+            pendingStartDownEvent = null
+            pendingStartUpEvent = null
+            comboStartDispatched = false
+            return
+        }
+        val down = pendingStartDownEvent ?: return
+        pendingStartDownEvent = null
+        deliverToSdl(down)
+        comboStartDispatched = true
+        pendingStartUpEvent?.let { up ->
+            pendingStartUpEvent = null
+            deliverToSdl(up)
+            comboStartDispatched = false
+        }
+    }
+
+    private fun flushPendingSelect(token: Int) {
+        if (token != selectDispatchToken) return
+        if (comboTriggered || quickMenuOpen || saveDialogOpen || exitDialogOpen || capturingThumbnail) {
+            pendingSelectDownEvent = null
+            pendingSelectUpEvent = null
+            comboSelectDispatched = false
+            return
+        }
+        val down = pendingSelectDownEvent ?: return
+        pendingSelectDownEvent = null
+        deliverToSdl(down)
+        comboSelectDispatched = true
+        pendingSelectUpEvent?.let { up ->
+            pendingSelectUpEvent = null
+            deliverToSdl(up)
+            comboSelectDispatched = false
+        }
+    }
+
+    private fun deliverToSdl(event: KeyEvent) {
+        super.dispatchKeyEvent(event)
     }
 
     private fun showSaveStateDialog() {

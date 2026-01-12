@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <!-- Pause/Resume -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_pause_resume"
+        style="@style/Widget.Material3.Button.TextButton.Icon"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="start|center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/quick_menu_pause"
+        android:textAlignment="viewStart"
+        app:icon="@drawable/play_pause_24px"
+        app:iconGravity="start"
+        app:iconPadding="32dp"
+        app:iconSize="24dp"
+        app:iconTint="?attr/colorOnSurface" />
+
+    <!-- Save States -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_save_states"
+        style="@style/Widget.Material3.Button.TextButton.Icon"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="start|center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/quick_menu_save_states"
+        android:textAlignment="viewStart"
+        app:icon="@drawable/save_24px"
+        app:iconGravity="start"
+        app:iconPadding="32dp"
+        app:iconSize="24dp"
+        app:iconTint="?attr/colorOnSurface" />
+
+    <!-- Touch Controls -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_touch_controls"
+        style="@style/Widget.Material3.Button.TextButton.Icon"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="start|center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/quick_menu_show_touch_controls"
+        android:textAlignment="viewStart"
+        app:icon="@drawable/stadia_controller_24px"
+        app:iconGravity="start"
+        app:iconPadding="32dp"
+        app:iconSize="24dp"
+        app:iconTint="?attr/colorOnSurface" />
+
+    <!-- Gyro Steering -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_gyro_steering"
+        style="@style/Widget.Material3.Button.TextButton.Icon"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="start|center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/quick_menu_enable_gyro"
+        android:textAlignment="viewStart"
+        app:icon="@drawable/wheel"
+        app:iconGravity="start"
+        app:iconPadding="32dp"
+        app:iconSize="24dp"
+        app:iconTint="?attr/colorOnSurface" />
+
+    <!-- Exit Game -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_exit_game"
+        style="@style/Widget.Material3.Button.TextButton.Icon"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="start|center_vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/quick_menu_exit_game"
+        android:textAlignment="viewStart"
+        app:icon="@drawable/exit_to_app_24px"
+        app:iconGravity="start"
+        app:iconPadding="32dp"
+        app:iconSize="24dp"
+        app:iconTint="?attr/colorError" />
+
+</LinearLayout>
