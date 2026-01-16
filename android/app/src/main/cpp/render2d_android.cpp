@@ -10,11 +10,15 @@
 
 namespace {
 // Palette data from Model 3 hardware is in little-endian format (ABGR when viewed as 32-bit).
-// We extract and store in ARGB format (0xAARRGGBB) for the presenter.
-static inline uint8_t GetA(uint32_t abgr) { return static_cast<uint8_t>(abgr >> 24); }
-static inline uint8_t GetR(uint32_t abgr) { return static_cast<uint8_t>(abgr >> 0); }
-static inline uint8_t GetG(uint32_t abgr) { return static_cast<uint8_t>(abgr >> 8); }
-static inline uint8_t GetB(uint32_t abgr) { return static_cast<uint8_t>(abgr >> 16); }
+// Convert to ARGB (0xAARRGGBB) before handing it to the presenter.
+static inline uint32_t ABGRToARGB(uint32_t abgr)
+{
+  return (abgr & 0xFF00FF00u) | ((abgr & 0x00FF0000u) >> 16) | ((abgr & 0x000000FFu) << 16);
+}
+static inline uint8_t GetA(uint32_t argb) { return static_cast<uint8_t>(argb >> 24); }
+static inline uint8_t GetR(uint32_t argb) { return static_cast<uint8_t>(argb >> 16); }
+static inline uint8_t GetG(uint32_t argb) { return static_cast<uint8_t>(argb >> 8); }
+static inline uint8_t GetB(uint32_t argb) { return static_cast<uint8_t>(argb >> 0); }
 static inline uint32_t ARGB(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
 {
   return (uint32_t(a) << 24) | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
@@ -59,7 +63,7 @@ static inline void DrawTileLine(uint32_t *line,
       {
         uint16_t maskTest = 1 << (15 - ((pixelOffset + 0) / 32));
         bool visible = (mask & maskTest) != 0;
-        uint32_t pixel = visible ? palette[((pattern >> (p * 4)) & 0xF) | colorHi] : 0;
+        uint32_t pixel = visible ? ABGRToARGB(palette[((pattern >> (p * 4)) & 0xF) | colorHi]) : 0;
         if (!alphaTest || (visible && (pixel >> 24) != 0))
           line[pixelOffset] = pixel;
       }
@@ -77,7 +81,7 @@ static inline void DrawTileLine(uint32_t *line,
         {
           uint16_t maskTest = 1 << (15 - ((pixelOffset + 0) / 32));
           bool visible = (mask & maskTest) != 0;
-          uint32_t pixel = visible ? palette[((pattern >> (p * 8)) & 0xFF) | colorHi] : 0;
+          uint32_t pixel = visible ? ABGRToARGB(palette[((pattern >> (p * 8)) & 0xFF) | colorHi]) : 0;
           if (!alphaTest || (visible && (pixel >> 24) != 0))
             line[pixelOffset] = pixel;
         }
@@ -291,4 +295,3 @@ void CRender2D::RenderFrameTop(void)
 void CRender2D::EndFrame(void) {}
 
 #endif // __ANDROID__
-
