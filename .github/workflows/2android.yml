@@ -18,15 +18,25 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Sistem Araçlarını Kur
+    - name: Sağlam Gradle Wrapper Enjekte Et
       run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake gradle
-        # Projedeki sorunlu gradlew dosyasını SİLİYORUZ, sisteminkini kullanacağız
-        rm -f android/gradlew
-        rm -f android/gradlew.bat
+        cd android
+        # Eski ve bozuk olanları siliyoruz
+        rm -f gradlew gradlew.bat
+        # Google'ın standart ve sağlam gradlew dosyasını indiriyoruz
+        curl -LO https://raw.githubusercontent.com/gradle/gradle/master/gradlew
+        chmod +x gradlew
+        # Wrapper ayarlarını temizliyoruz
+        rm -rf gradle/wrapper
+        mkdir -p gradle/wrapper
+        # Güvenilir bir wrapper sürümü tanımlıyoruz
+        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
 
-    - name: Hatalı Dosyaları Temizle
+    - name: Hatalı Parametreleri Temizle
       run: |
         rm -f android/gradle.properties
         echo "org.gradle.jvmargs=-Xmx2048m" > android/gradle.properties
@@ -34,15 +44,15 @@ jobs:
         echo "android.enableJetifier=true" >> android/gradle.properties
         echo "kotlin.jvm.target=17" >> android/gradle.properties
         
-        # Tüm dosyaları tara ve o hatalı komutu her yerden sil
+        # Projedeki tüm dosyalarda o sinsi "-Xmx64m" metnini kazıyoruz
         find . -type f -exec sed -i 's/"-Xmx64m"//g' {} +
         find . -type f -exec sed -i 's/-Xmx64m//g' {} +
 
-    - name: Build with System Gradle
+    - name: Build with Fixed Gradle
       run: |
         cd android
-        # Burası kritik: ./gradlew yerine sadece 'gradle' yazıyoruz (Sistemin kendi aracı)
-        gradle assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
+        # Yeni indirdiğimiz sağlam gradlew ile çalıştırıyoruz
+        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
