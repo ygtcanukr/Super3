@@ -24,24 +24,27 @@ jobs:
         sudo apt-get update && sudo apt-get install -y cmake
         chmod +x android/gradlew
 
-    - name: Hatalı Dosyaları Temizle ve Bypass Et
+    - name: Hatalı Dosyaları Temizle ve JVM Sabitle
       run: |
         rm -f android/gradle.properties
-        echo "org.gradle.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m" > android/gradle.properties
+        # Hem Java hem Kotlin için hedefi 17 yapıyoruz
+        echo "org.gradle.jvmargs=-Xmx2048m" > android/gradle.properties
         echo "android.useAndroidX=true" >> android/gradle.properties
         echo "android.enableJetifier=true" >> android/gradle.properties
         echo "kotlin.jvm.target=17" >> android/gradle.properties
         
-        find . -type f -exec sed -i 's/"-Xmx64m"//g' {} +
-        find . -type f -exec sed -i 's/"-Xms64m"//g' {} +
+        # Proje içindeki tüm dosyalarda 21 veya 64m kalıntılarını temizle
+        find . -type f -name "build.gradle*" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
+        find . -type f -name "build.gradle*" -exec sed -i 's/targetCompatibility = .VERSION_21./targetCompatibility = JavaVersion.VERSION_17/g' {} +
         find . -type f -exec sed -i 's/-Xmx64m//g' {} +
-        find . -type f -exec sed -i 's/-Xms64m//g' {} +
-
+        
     - name: Build with Gradle
       run: |
         cd android
+        # JAVA_HOME'u manuel olarak JDK 17 yoluna zorluyoruz
+        export JAVA_HOME=$JAVA_HOME_17_X64
         ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
-
+        
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
