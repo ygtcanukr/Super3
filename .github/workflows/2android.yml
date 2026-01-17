@@ -10,38 +10,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Repo ve Alt Modülleri Çek
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive  # BURASI KRİTİK: 3rdparty dosyalarını indirir
+        fetch-depth: 0
 
-    - name: set up JDK 17
+    - name: Java 17 Kurulumu
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Android SDK Araçlarını (CMake ve NDK) Zorla Kur
+    - name: Android SDK Araçlarını Hazırla
       run: |
-        # Hem CMake hem de NDK'yı en stabil sürümleriyle kuruyoruz
+        # CMake 3.22.1 ve NDK 25.1 en uyumlu ikilidir
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
-        # Yolları local.properties dosyasına kazıyoruz
         echo "cmake.dir=$ANDROID_HOME/cmake/3.22.1" > android/local.properties
         echo "ndk.dir=$ANDROID_HOME/ndk/25.1.8937393" >> android/local.properties
 
-    - name: Proje Ayarlarını ve Sürümleri Senkronize Et
+    - name: Proje Dosyalarını Onar
       run: |
         cd android
-        # 1. CMake 3.30 inadını 3.22'ye çek
+        # CMake versiyon dayatmasını 3.22.1'e çek
         find . -name "build.gradle*" -exec sed -i 's/version = "3.30.3"/version = "3.22.1"/g' {} +
         find . -name "build.gradle*" -exec sed -i 's/version "3.30.3"/version "3.22.1"/g' {} +
         
-        # 2. Java ve Kotlin sürüm uyumsuzluğunu gider
+        # Java 21 uyarısını sustur ve 17'ye çek
         find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
         find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
         
-        # 3. Bellek hatasını (Xmx64m) her yerden temizle
+        # Bellek hatasını (Xmx64m) temizle
         find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
-        
-        # 4. Temiz bir başlangıç için eski önbelleği sil
-        rm -rf .gradle
 
     - name: Gradle 8.13 Kurulumu
       run: |
@@ -53,11 +53,11 @@ jobs:
         echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Build APK (Hadi Başlayalım)
+    - name: Build APK (Razer Edge İçin Final)
       run: |
         cd android
-        # Gradle'a hem Java hem de NDK yolunu açıkça gösteriyoruz
-        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME -Dandroid.ndkpath=$ANDROID_HOME/ndk/25.1.8937393
+        export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.1.8937393
+        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME -Dandroid.ndkpath=$ANDROID_NDK_HOME
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
