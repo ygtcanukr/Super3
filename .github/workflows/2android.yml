@@ -18,21 +18,23 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Gradle Sistemini Sıfırdan Kur
+    - name: Gradle Sistemini 8.13 Olarak Kur
       run: |
         cd android
-        # 1. Her şeyi temizle
         rm -rf gradle/wrapper gradlew gradlew.bat
-        
-        # 2. Klasörü oluştur
         mkdir -p gradle/wrapper
         
-        # 3. Eksik olan .jar dosyasını ve özelliklerini GitHub'ın kendi güvenli deposundan çek
-        curl -L https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-        curl -L https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.properties -o gradle/wrapper/gradle-wrapper.properties
-        curl -L https://github.com/gradle/gradle/raw/v8.7.0/gradlew -o gradlew
+        # Projenin istediği 8.13 sürümünü çekiyoruz
+        curl -L https://github.com/gradle/gradle/raw/v8.13.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+        curl -L https://github.com/gradle/gradle/raw/v8.13.0/gradlew -o gradlew
         
-        # 4. Yetki ver
+        # Özellikler dosyasını tam olarak 8.13 olacak şekilde oluşturuyoruz
+        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        
         chmod +x gradlew
 
     - name: Hatalı Parametre Temizliği
@@ -43,11 +45,10 @@ jobs:
         echo "android.enableJetifier=true" >> android/gradle.properties
         echo "kotlin.jvm.target=17" >> android/gradle.properties
         
-        # Sinsi hatayı kökten kazı
         find . -type f -exec sed -i 's/"-Xmx64m"//g' {} +
         find . -type f -exec sed -i 's/-Xmx64m//g' {} +
 
-    - name: Build APK (Final Hamle)
+    - name: Build APK (Final)
       run: |
         cd android
         ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
