@@ -18,12 +18,30 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: CMake ve Gerekli Araçları Kur
+    - name: Android SDK Araçlarını (CMake ve NDK) Zorla Kur
       run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake
-        # Android SDK içindeki CMake yolunu sisteme tanıtıyoruz
-        echo "cmake.dir=/usr" >> android/local.properties
+        # Hem CMake hem de NDK'yı en stabil sürümleriyle kuruyoruz
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
+        # Yolları local.properties dosyasına kazıyoruz
+        echo "cmake.dir=$ANDROID_HOME/cmake/3.22.1" > android/local.properties
+        echo "ndk.dir=$ANDROID_HOME/ndk/25.1.8937393" >> android/local.properties
+
+    - name: Proje Ayarlarını ve Sürümleri Senkronize Et
+      run: |
+        cd android
+        # 1. CMake 3.30 inadını 3.22'ye çek
+        find . -name "build.gradle*" -exec sed -i 's/version = "3.30.3"/version = "3.22.1"/g' {} +
+        find . -name "build.gradle*" -exec sed -i 's/version "3.30.3"/version "3.22.1"/g' {} +
+        
+        # 2. Java ve Kotlin sürüm uyumsuzluğunu gider
+        find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
+        find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
+        
+        # 3. Bellek hatasını (Xmx64m) her yerden temizle
+        find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
+        
+        # 4. Temiz bir başlangıç için eski önbelleği sil
+        rm -rf .gradle
 
     - name: Gradle 8.13 Kurulumu
       run: |
@@ -35,27 +53,11 @@ jobs:
         echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Dosya İçi Düzeltmeler
+    - name: Build APK (Hadi Başlayalım)
       run: |
         cd android
-        # Java 21 ve sinsi bellek hatalarını temizle
-        find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
-        find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
-        
-        rm -f gradle.properties
-        echo "org.gradle.jvmargs=-Xmx2048m" > gradle.properties
-        echo "android.useAndroidX=true" >> gradle.properties
-        echo "android.enableJetifier=true" >> gradle.properties
-        echo "kotlin.jvm.target=17" >> gradle.properties
-        
-        # Bellek kalıntılarını kökten kazı
-        find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
-
-    - name: Build APK (Bitiş Çizgisi)
-      run: |
-        cd android
-        # Gradle'a CMake'in yerini açıkça belirtiyoruz
-        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
+        # Gradle'a hem Java hem de NDK yolunu açıkça gösteriyoruz
+        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME -Dandroid.ndkpath=$ANDROID_HOME/ndk/25.1.8937393
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
