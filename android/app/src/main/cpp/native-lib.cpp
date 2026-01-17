@@ -324,8 +324,7 @@ struct Super3Host {
     // Ensure required nodes exist / sane.
     config.Set("PowerPCFrequency", "50");
 
-    // Keep the current Android renderer path stable for now.
-    config.Set("New3DEngine", false);
+    // Keep unsupported rendering knobs clamped on Android.
     config.Set("QuadRendering", false);
 
     // Allow user-specified framebuffer sizes. Clamp to sane bounds so we don't
@@ -999,7 +998,8 @@ extern "C" int SDL_main(int argc, char* argv[]) {
         SDL_Log("Controls (touch): bottom-left=COIN, bottom-right=START, top-left=SERVICE, top-right=TEST, left-middle=DPAD/STEER, right-middle=THROTTLE/BRAKE");
       }
 
-      if (!new3dAttached) {
+      const bool useNew3d = host.config["New3DEngine"].ValueAsDefault<bool>(true);
+      if (useNew3d && !new3dAttached) {
         new3dAttached = host.InstallNew3D(&presenter, xOff, yOff, xRes, yRes, totalXRes, totalYRes);
       }
 

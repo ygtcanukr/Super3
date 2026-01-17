@@ -102,6 +102,15 @@
       style="?attr/materialButtonElevatedStyle" />
 
     <com.google.android.material.button.MaterialButton
+      android:id="@+id/btn_real3d_renderer"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="12dp"
+      android:checkable="true"
+      android:text="3D renderer (Real3D)"
+      style="?attr/materialButtonElevatedStyle" />
+
+    <com.google.android.material.button.MaterialButton
       android:id="@+id/btn_enhanced_real3d"
       android:layout_width="match_parent"
       android:layout_height="wrap_content"

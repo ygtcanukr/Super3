@@ -2,7 +2,7 @@
 #define _R3DSHADERTRIANGLES_H_
 
 #ifdef __ANDROID__
-// GLES 3.0 shaders (minimal path: textured vertex-colour with optional alpha discard).
+// GLES 3.0 shaders (full path adapted from desktop triangle shader).
 static const char *vertexShaderR3D = R"glsl(#version 300 es
 precision highp float;
 precision highp int;
@@ -21,61 +21,351 @@ layout(location=3) in vec4  inColour;      // normalized UBYTE -> float
 layout(location=4) in vec3  inFaceNormal;
 layout(location=5) in float inFixedShade;
 
-out vec2 vTexCoord;
-out vec4 vColor;
-out float vAlpha;
-out vec3 vDummy; // keeps attributes alive
+// outputs to fragment shader
+out vec3 fsViewVertex;
+out vec3 fsViewNormal;
+out vec2 fsTexCoord;
+out vec4 fsColor;
+out float fsDiscard;
+out float fsFixedShade;
+
+vec4 GetColour(vec4 colour)
+{
+  vec4 c = colour;
+  if (translatorMap != 0) {
+    c.rgb *= 16.0;
+  }
+  return c;
+}
+
+float CalcBackFace(in vec3 viewVertex)
+{
+  vec3 vt = viewVertex - vec3(0.0);
+  vec3 vn = (mat3(modelMat) * inFaceNormal);
+  return dot(vt, vn);
+}
 
 void main()
 {
-  vec4 c = inColour;
-  if (translatorMap != 0) c.rgb *= 16.0;
-  vColor = c;
-  vTexCoord = inTexCoord;
-  vAlpha = c.a;
-  vDummy = inNormal + inFaceNormal + vec3(inFixedShade);
-  gl_Position = projMat * modelMat * inVertex;
+  fsViewVertex = vec3(modelMat * inVertex);
+  fsViewNormal = (mat3(modelMat) * inNormal) / modelScale;
+  fsDiscard    = CalcBackFace(fsViewVertex);
+  fsColor      = GetColour(inColour);
+  fsTexCoord   = inTexCoord;
+  fsFixedShade = inFixedShade;
+  gl_Position  = projMat * modelMat * inVertex;
 }
 )glsl";
 
 static const char *fragmentShaderR3D = R"glsl(#version 300 es
-precision mediump float;
-precision mediump int;
+precision highp float;
+precision highp int;
+precision lowp sampler2D;
 
-in vec2 vTexCoord;
-in vec4 vColor;
-in float vAlpha;
-in vec3 vDummy;
+uniform sampler2D tex1;         // base tex
+uniform sampler2D tex2;         // micro tex (optional)
 
-uniform sampler2D tex1;
-uniform int textureEnabled;
-uniform int textureAlpha;
-uniform int alphaTest;
-uniform int discardAlpha;
+// texturing
+uniform int   textureEnabled;
+uniform int   microTexture;
+uniform float microTextureScale;
+uniform vec2  baseTexSize;
+uniform int   textureInverted;
+uniform int   textureAlpha;
+uniform int   alphaTest;
+uniform int   discardAlpha;
+uniform ivec2 textureWrapMode;
+
+// general
+uniform vec3  fogColour;
+uniform vec4  spotEllipse;      // spotlight ellipse position
+uniform vec2  spotRange;        // spotlight Z range
+uniform vec3  spotColor;        // spotlight RGB color
+uniform vec3  spotFogColor;     // spotlight RGB color on fog
+uniform vec3  lighting[2];      // lighting state
+uniform int   lightEnabled;     // lighting enabled (1.0) or luminous (0.0)
+uniform int   sunClamp;
+uniform int   intensityClamp;
+uniform int   specularEnabled;
+uniform float specularValue;
+uniform float shininess;
+uniform float fogIntensity;
+uniform float fogDensity;
+uniform float fogStart;
+uniform float fogAttenuation;
+uniform float fogAmbient;
+uniform int   fixedShading;
+uniform int   hardwareStep;
+
+// interpolated inputs from vertex shader
+in vec3 fsViewVertex;
+in vec3 fsViewNormal;
+in vec4 fsColor;
+in vec2 fsTexCoord;
+in float fsDiscard;
+in float fsFixedShade;
 
 out vec4 oColor;
 
-void main()
+float mip_map_level(in vec2 texture_coordinate) // in texel units
 {
-  vec4 col = vColor;
-  vec4 tex = vec4(1.0);
+  vec2 dx_vtc = dFdx(texture_coordinate);
+  vec2 dy_vtc = dFdy(texture_coordinate);
+  float delta_max_sqr = max(dot(dx_vtc, dx_vtc), dot(dy_vtc, dy_vtc));
+  float mml = 0.5 * log2(delta_max_sqr);
+  return max(0.0, mml);
+}
 
-  if (textureEnabled != 0) {
-    tex = texture(tex1, vTexCoord);
-    if (textureAlpha != 0) {
-      col *= tex;
+float LinearTexLocations(int wrapMode, float size, float u, out float u0, out float u1)
+{
+  float texelSize = 1.0 / size;
+  float halfTexelSize = 0.5 / size;
+
+  if (wrapMode == 0) { // repeat
+    u = (u * size) - 0.5;
+    u0 = (floor(u) + 0.5) / size;
+    u0 = fract(u0);
+    u1 = u0 + texelSize;
+    u1 = fract(u1);
+    return fract(u);
+  } else if (wrapMode == 1) { // repeat + clamp
+    u = fract(u);
+    u = (u * size) - 0.5;
+    u0 = (floor(u) + 0.5) / size;
+    u1 = u0 + texelSize;
+
+    if (u0 < 0.0) u0 = 0.0;
+    if (u1 >= 1.0) u1 = 1.0 - halfTexelSize;
+    return fract(u);
+  } else { // mirror + mirror clamp
+    float odd = floor(mod(u, 2.0));
+    if (odd > 0.0) {
+      u = 1.0 - fract(u);
     } else {
-      col.rgb *= tex.rgb;
+      u = fract(u);
+    }
+
+    u = (u * size) - 0.5;
+    u0 = (floor(u) + 0.5) / size;
+    u1 = u0 + texelSize;
+
+    if (u0 < 0.0) u0 = 0.0;
+    if (u1 >= 1.0) u1 = 1.0 - halfTexelSize;
+    return fract(u);
+  }
+}
+
+vec4 texBiLinear(sampler2D texSampler, float level, ivec2 wrapMode, vec2 texSize, vec2 texCoord)
+{
+  float tx[2], ty[2];
+  float a = LinearTexLocations(wrapMode.s, texSize.x, texCoord.x, tx[0], tx[1]);
+  float b = LinearTexLocations(wrapMode.t, texSize.y, texCoord.y, ty[0], ty[1]);
+
+  vec4 p0q0 = textureLod(texSampler, vec2(tx[0], ty[0]), level);
+  vec4 p1q0 = textureLod(texSampler, vec2(tx[1], ty[0]), level);
+  vec4 p0q1 = textureLod(texSampler, vec2(tx[0], ty[1]), level);
+  vec4 p1q1 = textureLod(texSampler, vec2(tx[1], ty[1]), level);
+
+  if (alphaTest != 0) {
+    if (p0q0.a > p1q0.a) { p1q0.rgb = p0q0.rgb; }
+    if (p0q0.a > p0q1.a) { p0q1.rgb = p0q0.rgb; }
+
+    if (p1q0.a > p0q0.a) { p0q0.rgb = p1q0.rgb; }
+    if (p1q0.a > p1q1.a) { p1q1.rgb = p1q0.rgb; }
+
+    if (p0q1.a > p0q0.a) { p0q0.rgb = p0q1.rgb; }
+    if (p0q1.a > p1q1.a) { p1q1.rgb = p0q1.rgb; }
+
+    if (p1q1.a > p0q1.a) { p0q1.rgb = p1q1.rgb; }
+    if (p1q1.a > p1q0.a) { p1q0.rgb = p1q1.rgb; }
+  }
+
+  vec4 pInterp_q0 = mix(p0q0, p1q0, a);
+  vec4 pInterp_q1 = mix(p0q1, p1q1, a);
+  return mix(pInterp_q0, pInterp_q1, b);
+}
+
+vec4 textureR3D(sampler2D texSampler, ivec2 wrapMode, vec2 texSize, vec2 texCoord)
+{
+  float numLevels = floor(log2(min(texSize.x, texSize.y)));
+  float fLevel = min(mip_map_level(texCoord * texSize), numLevels);
+  fLevel *= (alphaTest != 0) ? 0.5 : 0.8;
+
+  float iLevel = floor(fLevel);
+  vec2 texSize0 = texSize / exp2(iLevel);
+  vec2 texSize1 = texSize / exp2(iLevel + 1.0);
+
+  vec4 texLevel0 = texBiLinear(texSampler, iLevel, wrapMode, texSize0, texCoord);
+  vec4 texLevel1 = texBiLinear(texSampler, iLevel + 1.0, wrapMode, texSize1, texCoord);
+  return mix(texLevel0, texLevel1, fract(fLevel));
+}
+
+vec4 GetTextureValue()
+{
+  vec4 tex1Data = textureR3D(tex1, textureWrapMode, baseTexSize, fsTexCoord);
+
+  if (textureInverted != 0) {
+    tex1Data.rgb = vec3(1.0) - tex1Data.rgb;
+  }
+
+  if (microTexture != 0) {
+    vec2 scale = (baseTexSize / 128.0) * microTextureScale;
+    vec4 tex2Data = textureR3D(tex2, ivec2(0, 0), vec2(128.0), fsTexCoord * scale);
+
+    float lod = mip_map_level(fsTexCoord * scale * vec2(128.0));
+    float blendFactor = max(lod - 1.5, 0.0);
+    blendFactor = min(blendFactor, 1.0);
+    blendFactor = (blendFactor + 1.0) / 2.0;
+    tex1Data = mix(tex2Data, tex1Data, blendFactor);
+  }
+
+  if (alphaTest != 0 && (tex1Data.a < (32.0 / 255.0))) {
+    discard;
+  }
+
+  if (textureAlpha != 0) {
+    if (discardAlpha != 0) {
+      if (tex1Data.a < 1.0) {
+        discard;
+      }
+    } else {
+      if ((tex1Data.a * fsColor.a) >= 1.0) {
+        discard;
+      }
     }
   }
 
-  // keep vDummy "used"
-  col.rgb += vDummy * 0.0;
+  if (textureAlpha == 0) {
+    tex1Data.a = 1.0;
+  }
 
-  if (alphaTest != 0 && tex.a < (32.0/255.0)) discard;
-  if (discardAlpha != 0 && col.a < 0.99) discard;
+  return tex1Data;
+}
 
-  oColor = col;
+void Step15Luminous(inout vec4 colour)
+{
+  if (hardwareStep == 0x15) {
+    if (lightEnabled == 0 && textureEnabled != 0) {
+      if (fixedShading != 0) {
+        colour.rgb *= 1.0 + fsFixedShade + lighting[1].y;
+      } else {
+        colour.rgb *= vec3(1.5);
+      }
+    }
+  }
+}
+
+float CalcFog()
+{
+  float z = -fsViewVertex.z;
+  float fog = fogIntensity * clamp(fogStart + z * fogDensity, 0.0, 1.0);
+  return fog;
+}
+
+void main()
+{
+  vec4 tex1Data;
+  vec4 colData;
+  vec4 finalData;
+  vec4 fogData;
+
+  if (fsDiscard > 0.0) {
+    discard; // emulate back face culling here
+  }
+
+  fogData = vec4(fogColour.rgb * fogAmbient, CalcFog());
+  tex1Data = vec4(1.0);
+
+  if (textureEnabled != 0) {
+    tex1Data = GetTextureValue();
+  }
+
+  colData = fsColor;
+  Step15Luminous(colData);
+  finalData = tex1Data * colData;
+
+  if (finalData.a < (1.0 / 16.0)) {
+    discard;
+  }
+
+  float ellipse;
+  ellipse = length((gl_FragCoord.xy - spotEllipse.xy) / spotEllipse.zw);
+  ellipse = pow(ellipse, 2.0);
+  ellipse = 1.0 - ellipse;
+  ellipse = max(0.0, ellipse);
+
+  float enable, absExtent, d, inv_r, range;
+  enable = step(spotRange.x, -fsViewVertex.z);
+
+  if (spotRange.y == 0.0) {
+    range = 0.0;
+  } else {
+    absExtent = abs(spotRange.y);
+    d = spotRange.x + absExtent + fsViewVertex.z;
+    d = min(d, 0.0);
+    inv_r = 1.0 / (1.0 + absExtent);
+    range = 1.0 / pow(d * inv_r - 1.0, 2.0);
+    range *= enable;
+  }
+
+  float lobeEffect = range * ellipse;
+  float lobeFogEffect = enable * ellipse;
+
+  if (lightEnabled != 0) {
+    vec3 lightIntensity;
+    vec3 sunVector;
+    float sunFactor;
+
+    sunVector = lighting[0];
+    if (fixedShading != 0) {
+      sunFactor = fsFixedShade;
+    } else {
+      sunFactor = dot(sunVector, fsViewNormal);
+    }
+
+    sunFactor = clamp(sunFactor, -1.0, 1.0);
+    if (sunClamp != 0) {
+      sunFactor = max(sunFactor, 0.0);
+    }
+
+    lightIntensity = vec3(sunFactor * lighting[1].x + lighting[1].y);
+    lightIntensity.rgb += spotColor * lobeEffect;
+    if (intensityClamp != 0) {
+      lightIntensity = min(lightIntensity, 1.0);
+    }
+
+    finalData.rgb *= lightIntensity;
+
+    if (specularEnabled != 0) {
+      float exponent, NdotL, specularFactor;
+      vec4 biasIndex, expIndex, multIndex;
+
+      NdotL = max(0.0, sunFactor);
+      expIndex = vec4(8.0, 16.0, 32.0, 64.0);
+      multIndex = vec4(2.0, 2.0, 3.0, 4.0);
+      biasIndex = vec4(0.95, 0.95, 1.05, 1.0);
+      exponent = expIndex[int(shininess)] / biasIndex[int(shininess)];
+
+      specularFactor = pow(NdotL, exponent);
+      specularFactor *= multIndex[int(shininess)];
+      specularFactor *= biasIndex[int(shininess)];
+      specularFactor *= specularValue;
+      specularFactor *= lighting[1].x;
+
+      if (colData.a < 1.0) {
+        finalData.a = max(finalData.a, specularFactor);
+      }
+
+      finalData.rgb += vec3(specularFactor);
+    }
+  }
+
+  finalData.rgb = min(finalData.rgb, vec3(1.0));
+
+  vec3 lSpotFogColor = spotFogColor * fogAttenuation * fogColour.rgb * lobeFogEffect;
+  finalData.rgb = mix(finalData.rgb, fogData.rgb + lSpotFogColor, fogData.a);
+
+  oColor = finalData;
 }
 )glsl";
 
