@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Repo ve Tüm Dış Referansları Çek (SDL & Supermodel)
+    - name: Repo ve Tüm Dış Referansları Çek
       uses: actions/checkout@v4
       with:
-        submodules: recursive  # SDL ve diğer referansları indirir
+        submodules: recursive
         fetch-depth: 0
 
     - name: Java 17 Hazırla
@@ -22,21 +22,25 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Android SDK Araçlarını Kur (Sega Model 3 İçin)
+    - name: Android SDK Araçlarını Kur
       run: |
-        # Bu proje özellikle NDK 25 ve CMake 3.22 ile en kararlı çalışır
+        # NDK 25.1.8937393 kuruyoruz
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
         echo "cmake.dir=$ANDROID_HOME/cmake/3.22.1" > android/local.properties
         echo "ndk.dir=$ANDROID_HOME/ndk/25.1.8937393" >> android/local.properties
 
-    - name: Kütüphane ve Sürüm Uyumluluk Yamaları
+    - name: Sürüm Çakışmalarını Zorla Düzelt
       run: |
         cd android
-        # 1. CMake 3.30 zorunluluğunu esnetiyoruz (En kritik yer)
+        # 1. EN KRİTİK YER: Projenin içindeki NDK 29 inadını silip NDK 25'e zorluyoruz
+        find . -name "build.gradle*" -exec sed -i 's/ndkVersion = .*/ndkVersion = "25.1.8937393"/g' {} +
+        find . -name "build.gradle*" -exec sed -i 's/ndkVersion ".*/ndkVersion "25.1.8937393"/g' {} +
+        
+        # 2. CMake 3.30'u 3.22'ye çek
         find . -name "build.gradle*" -exec sed -i 's/version = "3.30.3"/version = "3.22.1"/g' {} +
         find . -name "build.gradle*" -exec sed -i 's/version "3.30.3"/version "3.22.1"/g' {} +
         
-        # 2. Java 21 vs 17 ve Bellek düzeltmeleri
+        # 3. Java ve Bellek Düzeltmeleri
         find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
         find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
         find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
@@ -51,10 +55,9 @@ jobs:
         echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Build APK (Razer Edge Snapdragon Optimized)
+    - name: Build APK
       run: |
         cd android
-        # Ortam değişkenlerini SDL ve NDK için tanımlıyoruz
         export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.1.8937393
         ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME -Dandroid.ndkpath=$ANDROID_NDK_HOME
 
