@@ -13,7 +13,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: set up JDK 17
-      uses: uses/actions/setup-java@v4
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
@@ -28,24 +28,26 @@ jobs:
         echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Dosya İçi Sürüm Düzeltme
+    - name: Dosya İçi Sürüm Düzeltme ve Temizlik
       run: |
         cd android
-        # Projenin içindeki gizli Java 21 ayarlarını 17'ye çeviriyoruz
+        # Java 21 ve bellek kalıntılarını dosyaların içinden siliyoruz
         find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
         find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
         
-        # gradle.properties temizliği
+        # gradle.properties dosyasını temiz ve stabil ayarlarla kur
+        rm -f gradle.properties
         echo "org.gradle.jvmargs=-Xmx2048m" > gradle.properties
+        echo "android.useAndroidX=true" >> gradle.properties
+        echo "android.enableJetifier=true" >> gradle.properties
         echo "kotlin.jvm.target=17" >> gradle.properties
         
-        # O sinsi bellek hatasını her yerden sil
+        # Her yerdeki o hatalı bellek kodunu temizle
         find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
 
     - name: Build APK
       run: |
         cd android
-        # Java 17 yolunu Gradle'a en sert şekilde dikte ediyoruz
         ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
     - name: Upload APK
