@@ -13,45 +13,40 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: set up JDK 17
-      uses: actions/setup-java@v4
+      uses: uses/actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Gradle Sistemini 8.13 Olarak Kur
+    - name: Gradle 8.13 Kurulumu
       run: |
         cd android
         rm -rf gradle/wrapper gradlew gradlew.bat
         mkdir -p gradle/wrapper
-        
-        # Projenin istediği 8.13 sürümünü çekiyoruz
         curl -L https://github.com/gradle/gradle/raw/v8.13.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
         curl -L https://github.com/gradle/gradle/raw/v8.13.0/gradlew -o gradlew
-        
-        # Özellikler dosyasını tam olarak 8.13 olacak şekilde oluşturuyoruz
-        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        
+        echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Hatalı Parametre Temizliği
-      run: |
-        rm -f android/gradle.properties
-        echo "org.gradle.jvmargs=-Xmx2048m" > android/gradle.properties
-        echo "android.useAndroidX=true" >> android/gradle.properties
-        echo "android.enableJetifier=true" >> android/gradle.properties
-        echo "kotlin.jvm.target=17" >> android/gradle.properties
-        
-        find . -type f -exec sed -i 's/"-Xmx64m"//g' {} +
-        find . -type f -exec sed -i 's/-Xmx64m//g' {} +
-
-    - name: Build APK (Final)
+    - name: Dosya İçi Sürüm Düzeltme
       run: |
         cd android
-        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
+        # Projenin içindeki gizli Java 21 ayarlarını 17'ye çeviriyoruz
+        find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
+        find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
+        
+        # gradle.properties temizliği
+        echo "org.gradle.jvmargs=-Xmx2048m" > gradle.properties
+        echo "kotlin.jvm.target=17" >> gradle.properties
+        
+        # O sinsi bellek hatasını her yerden sil
+        find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
+
+    - name: Build APK
+      run: |
+        cd android
+        # Java 17 yolunu Gradle'a en sert şekilde dikte ediyoruz
+        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
