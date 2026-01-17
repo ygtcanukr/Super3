@@ -18,25 +18,24 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Sağlam Gradle Wrapper Enjekte Et
+    - name: Gradle Sistemini Sıfırdan Kur
       run: |
         cd android
-        # Eski ve bozuk olanları siliyoruz
-        rm -f gradlew gradlew.bat
-        # Google'ın standart ve sağlam gradlew dosyasını indiriyoruz
-        curl -LO https://raw.githubusercontent.com/gradle/gradle/master/gradlew
-        chmod +x gradlew
-        # Wrapper ayarlarını temizliyoruz
-        rm -rf gradle/wrapper
+        # 1. Her şeyi temizle
+        rm -rf gradle/wrapper gradlew gradlew.bat
+        
+        # 2. Klasörü oluştur
         mkdir -p gradle/wrapper
-        # Güvenilir bir wrapper sürümü tanımlıyoruz
-        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        
+        # 3. Eksik olan .jar dosyasını ve özelliklerini GitHub'ın kendi güvenli deposundan çek
+        curl -L https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+        curl -L https://github.com/gradle/gradle/raw/v8.7.0/gradle/wrapper/gradle-wrapper.properties -o gradle/wrapper/gradle-wrapper.properties
+        curl -L https://github.com/gradle/gradle/raw/v8.7.0/gradlew -o gradlew
+        
+        # 4. Yetki ver
+        chmod +x gradlew
 
-    - name: Hatalı Parametreleri Temizle
+    - name: Hatalı Parametre Temizliği
       run: |
         rm -f android/gradle.properties
         echo "org.gradle.jvmargs=-Xmx2048m" > android/gradle.properties
@@ -44,14 +43,13 @@ jobs:
         echo "android.enableJetifier=true" >> android/gradle.properties
         echo "kotlin.jvm.target=17" >> android/gradle.properties
         
-        # Projedeki tüm dosyalarda o sinsi "-Xmx64m" metnini kazıyoruz
+        # Sinsi hatayı kökten kazı
         find . -type f -exec sed -i 's/"-Xmx64m"//g' {} +
         find . -type f -exec sed -i 's/-Xmx64m//g' {} +
 
-    - name: Build with Fixed Gradle
+    - name: Build APK (Final Hamle)
       run: |
         cd android
-        # Yeni indirdiğimiz sağlam gradlew ile çalıştırıyoruz
         ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
 
     - name: Upload APK
