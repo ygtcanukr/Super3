@@ -17,38 +17,32 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        # Cache'i devre dışı bırakıyoruz ki eski Java sürümlerinden kalıntı kalmasın
-        
+
     - name: Sistem Araçlarını Kur
       run: |
-        sudo apt-get update && sudo apt-get install -y cmake
-        chmod +x android/gradlew
+        sudo apt-get update
+        sudo apt-get install -y cmake gradle
+        # Projedeki sorunlu gradlew dosyasını SİLİYORUZ, sisteminkini kullanacağız
+        rm -f android/gradlew
+        rm -f android/gradlew.bat
 
-    - name: Projeyi Java 17'ye Zorla (Deep Clean)
+    - name: Hatalı Dosyaları Temizle
       run: |
-        # 1. Eski ayarları tamamen sil
         rm -f android/gradle.properties
-        
-        # 2. Hem Java hem Kotlin'i 17'ye kilitleyen ayarları yaz
-        echo "org.gradle.jvmargs=-Xmx2048m" >> android/gradle.properties
+        echo "org.gradle.jvmargs=-Xmx2048m" > android/gradle.properties
         echo "android.useAndroidX=true" >> android/gradle.properties
         echo "android.enableJetifier=true" >> android/gradle.properties
         echo "kotlin.jvm.target=17" >> android/gradle.properties
-        echo "org.gradle.java.home=$JAVA_HOME_17_X64" >> android/gradle.properties
         
-        # 3. build.gradle dosyalarındaki tüm 21'leri 17 yap (Zorla)
-        find . -name "*.gradle*" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
-        find . -name "*.gradle*" -exec sed -i 's/VERSION_21/VERSION_17/g' {} +
-        find . -name "*.gradle*" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
-        find . -name "*.gradle*" -exec sed -i 's/jvmTarget = '\''21'\''/jvmTarget = '\''17'\''/g' {} +
+        # Tüm dosyaları tara ve o hatalı komutu her yerden sil
+        find . -type f -exec sed -i 's/"-Xmx64m"//g' {} +
+        find . -type f -exec sed -i 's/-Xmx64m//g' {} +
 
-    - name: Build with Gradle
+    - name: Build with System Gradle
       run: |
         cd android
-        # Sistemdeki Java yolunu kesin olarak 17'ye yönlendir
-        export JAVA_HOME=$JAVA_HOME_17_X64
-        export PATH=$JAVA_HOME/bin:$PATH
-        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
+        # Burası kritik: ./gradlew yerine sadece 'gradle' yazıyoruz (Sistemin kendi aracı)
+        gradle assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME_17_X64
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
