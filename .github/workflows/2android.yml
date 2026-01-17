@@ -1,4 +1,4 @@
-name: Android CI
+name: Android CI (Super3 - Razer Edge Final)
 
 on:
   push:
@@ -10,40 +10,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Repo ve Alt Modülleri Çek
+    - name: Repo ve Tüm Dış Referansları Çek (SDL & Supermodel)
       uses: actions/checkout@v4
       with:
-        submodules: recursive  # BURASI KRİTİK: 3rdparty dosyalarını indirir
+        submodules: recursive  # SDL ve diğer referansları indirir
         fetch-depth: 0
 
-    - name: Java 17 Kurulumu
+    - name: Java 17 Hazırla
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Android SDK Araçlarını Hazırla
+    - name: Android SDK Araçlarını Kur (Sega Model 3 İçin)
       run: |
-        # CMake 3.22.1 ve NDK 25.1 en uyumlu ikilidir
+        # Bu proje özellikle NDK 25 ve CMake 3.22 ile en kararlı çalışır
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
         echo "cmake.dir=$ANDROID_HOME/cmake/3.22.1" > android/local.properties
         echo "ndk.dir=$ANDROID_HOME/ndk/25.1.8937393" >> android/local.properties
 
-    - name: Proje Dosyalarını Onar
+    - name: Kütüphane ve Sürüm Uyumluluk Yamaları
       run: |
         cd android
-        # CMake versiyon dayatmasını 3.22.1'e çek
+        # 1. CMake 3.30 zorunluluğunu esnetiyoruz (En kritik yer)
         find . -name "build.gradle*" -exec sed -i 's/version = "3.30.3"/version = "3.22.1"/g' {} +
         find . -name "build.gradle*" -exec sed -i 's/version "3.30.3"/version "3.22.1"/g' {} +
         
-        # Java 21 uyarısını sustur ve 17'ye çek
+        # 2. Java 21 vs 17 ve Bellek düzeltmeleri
         find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
         find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
-        
-        # Bellek hatasını (Xmx64m) temizle
         find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
 
-    - name: Gradle 8.13 Kurulumu
+    - name: Gradle 8.13 Motorunu Kur
       run: |
         cd android
         rm -rf gradle/wrapper gradlew gradlew.bat
@@ -53,9 +51,10 @@ jobs:
         echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Build APK (Razer Edge İçin Final)
+    - name: Build APK (Razer Edge Snapdragon Optimized)
       run: |
         cd android
+        # Ortam değişkenlerini SDL ve NDK için tanımlıyoruz
         export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.1.8937393
         ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME -Dandroid.ndkpath=$ANDROID_NDK_HOME
 
