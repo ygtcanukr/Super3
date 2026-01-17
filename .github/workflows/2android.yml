@@ -28,44 +28,12 @@ jobs:
         echo "cmake.dir=$ANDROID_HOME/cmake/3.22.1" > android/local.properties
         echo "ndk.dir=$ANDROID_HOME/ndk/25.1.8937393" >> android/local.properties
 
-    - name: C++ ve Gradle Dosyalarını Ameliyat Et (Zorunlu Sürüm Düşürme)
+    - name: C++ ve Gradle Dosyalarını Ameliyat Et
       run: |
-        # 1. CMakeLists.txt içindeki "3.30" şartını "3.22"ye çekiyoruz (Hatanın tam çözümü)
+        # 1. CMakeLists.txt içindeki 3.30 şartını düşür
         find . -name "CMakeLists.txt" -exec sed -i 's/cmake_minimum_required(VERSION 3.30)/cmake_minimum_required(VERSION 3.22)/g' {} +
-        find . -name "CMakeLists.txt" -exec sed -i 's/cmake_minimum_required(VERSION 3.30.0)/cmake_minimum_required(VERSION 3.22.1)/g' {} +
 
         cd android
-        # 2. NDK Sürüm dayatmasını 25'e çek
+        # 2. NDK Sürümünü zorla (Hem Groovy hem Kotlin için güvenli yöntem)
         find . -name "build.gradle*" -exec sed -i 's/ndkVersion = .*/ndkVersion = "25.1.8937393"/g' {} +
-        find . -name "build.gradle*" -exec sed -i 's/ndkVersion ".*/ndkVersion "25.1.8937393"/g' {} +
-        
-        # 3. Gradle içindeki CMake versiyonunu 3.22'ye çek
-        find . -name "build.gradle*" -exec sed -i 's/version = "3.30.3"/version "3.22.1"/g' {} +
-        find . -name "build.gradle*" -exec sed -i 's/version "3.30.3"/version "3.22.1"/g' {} +
-        
-        # 4. Java ve Bellek temizliği
-        find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
-        find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
-        find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
-
-    - name: Gradle 8.13 Kurulumu
-      run: |
-        cd android
-        rm -rf gradle/wrapper gradlew gradlew.bat
-        mkdir -p gradle/wrapper
-        curl -L https://github.com/gradle/gradle/raw/v8.13.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-        curl -L https://github.com/gradle/gradle/raw/v8.13.0/gradlew -o gradlew
-        echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
-        chmod +x gradlew
-
-    - name: Build APK (Razer Edge)
-      run: |
-        cd android
-        export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.1.8937393
-        ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME -Dandroid.ndkpath=$ANDROID_NDK_HOME
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: Super3-RazerEdge-APK
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        find . -name "build.gradle*" -exec sed -i
