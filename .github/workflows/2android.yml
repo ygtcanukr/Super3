@@ -1,4 +1,4 @@
-name: Android CI (Super3 - Razer Edge Final)
+name: Android CI (Super3 - Razer Edge Special)
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Repo ve Tüm Dış Referansları Çek
+    - name: Repo ve Alt Modülleri Çek
       uses: actions/checkout@v4
       with:
         submodules: recursive
@@ -24,28 +24,31 @@ jobs:
 
     - name: Android SDK Araçlarını Kur
       run: |
-        # NDK 25.1.8937393 kuruyoruz
         echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
         echo "cmake.dir=$ANDROID_HOME/cmake/3.22.1" > android/local.properties
         echo "ndk.dir=$ANDROID_HOME/ndk/25.1.8937393" >> android/local.properties
 
-    - name: Sürüm Çakışmalarını Zorla Düzelt
+    - name: C++ ve Gradle Dosyalarını Ameliyat Et (Zorunlu Sürüm Düşürme)
       run: |
+        # 1. CMakeLists.txt içindeki "3.30" şartını "3.22"ye çekiyoruz (Hatanın tam çözümü)
+        find . -name "CMakeLists.txt" -exec sed -i 's/cmake_minimum_required(VERSION 3.30)/cmake_minimum_required(VERSION 3.22)/g' {} +
+        find . -name "CMakeLists.txt" -exec sed -i 's/cmake_minimum_required(VERSION 3.30.0)/cmake_minimum_required(VERSION 3.22.1)/g' {} +
+
         cd android
-        # 1. EN KRİTİK YER: Projenin içindeki NDK 29 inadını silip NDK 25'e zorluyoruz
+        # 2. NDK Sürüm dayatmasını 25'e çek
         find . -name "build.gradle*" -exec sed -i 's/ndkVersion = .*/ndkVersion = "25.1.8937393"/g' {} +
         find . -name "build.gradle*" -exec sed -i 's/ndkVersion ".*/ndkVersion "25.1.8937393"/g' {} +
         
-        # 2. CMake 3.30'u 3.22'ye çek
-        find . -name "build.gradle*" -exec sed -i 's/version = "3.30.3"/version = "3.22.1"/g' {} +
+        # 3. Gradle içindeki CMake versiyonunu 3.22'ye çek
+        find . -name "build.gradle*" -exec sed -i 's/version = "3.30.3"/version "3.22.1"/g' {} +
         find . -name "build.gradle*" -exec sed -i 's/version "3.30.3"/version "3.22.1"/g' {} +
         
-        # 3. Java ve Bellek Düzeltmeleri
+        # 4. Java ve Bellek temizliği
         find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
         find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
         find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
 
-    - name: Gradle 8.13 Motorunu Kur
+    - name: Gradle 8.13 Kurulumu
       run: |
         cd android
         rm -rf gradle/wrapper gradlew gradlew.bat
@@ -55,7 +58,7 @@ jobs:
         echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Build APK
+    - name: Build APK (Razer Edge)
       run: |
         cd android
         export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.1.8937393
