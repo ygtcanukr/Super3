@@ -18,6 +18,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: CMake ve Gerekli Araçları Kur
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake
+        # Android SDK içindeki CMake yolunu sisteme tanıtıyoruz
+        echo "cmake.dir=/usr" >> android/local.properties
+
     - name: Gradle 8.13 Kurulumu
       run: |
         cd android
@@ -28,26 +35,26 @@ jobs:
         echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip" > gradle/wrapper/gradle-wrapper.properties
         chmod +x gradlew
 
-    - name: Dosya İçi Sürüm Düzeltme ve Temizlik
+    - name: Dosya İçi Düzeltmeler
       run: |
         cd android
-        # Java 21 ve bellek kalıntılarını dosyaların içinden siliyoruz
+        # Java 21 ve sinsi bellek hatalarını temizle
         find . -name "*.kts" -exec sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' {} +
         find . -name "*.kts" -exec sed -i 's/jvmTarget = "21"/jvmTarget = "17"/g' {} +
         
-        # gradle.properties dosyasını temiz ve stabil ayarlarla kur
         rm -f gradle.properties
         echo "org.gradle.jvmargs=-Xmx2048m" > gradle.properties
         echo "android.useAndroidX=true" >> gradle.properties
         echo "android.enableJetifier=true" >> gradle.properties
         echo "kotlin.jvm.target=17" >> gradle.properties
         
-        # Her yerdeki o hatalı bellek kodunu temizle
+        # Bellek kalıntılarını kökten kazı
         find .. -type f -exec sed -i 's/"-Xmx64m"//g' {} +
 
-    - name: Build APK
+    - name: Build APK (Bitiş Çizgisi)
       run: |
         cd android
+        # Gradle'a CMake'in yerini açıkça belirtiyoruz
         ./gradlew assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
     - name: Upload APK
